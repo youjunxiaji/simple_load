@@ -41,8 +41,8 @@ Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.i
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "{#MyAppURL}\output\{#MyAppName}-{#MyAppVersion}\*"; DestDir: "{app}"
-Source: "{#MyAppURL}\output\{#MyAppName}-{#MyAppVersion}\_internal\*"; DestDir: "{app}\_internal\"; Flags: recursesubdirs createallsubdirs
+Source: "{#MyAppURL}\output\{#MyAppName}\*"; DestDir: "{app}"
+Source: "{#MyAppURL}\output\{#MyAppName}\_internal\*"; DestDir: "{app}\_internal\"; Flags: recursesubdirs createallsubdirs
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]

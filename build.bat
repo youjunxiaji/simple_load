@@ -19,7 +19,7 @@ pyinstaller ^
     --onedir ^
     --console ^
     --distpath "%current_dir%output" ^
-    --name "simple_load-%APP_VERSION%" ^
+    --name "simple_load" ^
     --icon "%current_dir%static/配置数据处理.ico" ^
     --add-data "%current_dir%app_simpleLoad;app_simpleLoad/" ^
     --add-data "%current_dir%my_websockets;my_websockets/" ^

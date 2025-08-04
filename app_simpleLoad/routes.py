@@ -1,10 +1,12 @@
 import json
+import asyncio
 from fastapi import APIRouter, Request
 from loguru import logger
 from typing import Dict
 
 from app_simpleLoad.module.cal_simpleLoad import CalSimpleLoad
 from utils import log_all_processes_memory
+from my_websockets.global_ws import ws
 
 router = APIRouter()
 
@@ -14,7 +16,7 @@ async def load_file(request: Request, data_: Dict):
     """
     说明
     ---
-    FUNC 读取要处理的文件
+    FUNC 加载文件
     """
     m = log_all_processes_memory()
     manager = request.app.state.websocket_manager
@@ -22,6 +24,24 @@ async def load_file(request: Request, data_: Dict):
     
     # 检查实例是否存在，如果不存在则创建新实例
     if instance is None:
+        # 检查WebSocket连接状态，如果断开则等待重连
+        if not ws.is_connection_active('simple_load'):
+            logger.info("WebSocket连接断开，等待前端重连...")
+            
+            # 等待前端重连，最多等待10秒
+            for i in range(20):  # 20次 * 0.5秒 = 10秒
+                await asyncio.sleep(0.5)
+                if ws.is_connection_active('simple_load'):
+                    logger.info(f"WebSocket重连成功，等待了 {(i+1)*0.5} 秒")
+                    break
+            else:
+                # 10秒后仍未重连成功
+                return {
+                    "message": "WebSocket连接已断开，请刷新页面重新连接", 
+                    "status": "error",
+                    "need_reconnect": True
+                }
+        
         instance = CalSimpleLoad()
         manager.cal_instance = instance
         logger.info("创建新的 CalSimpleLoad 实例，WebSocket连接正常")

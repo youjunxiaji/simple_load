@@ -29,7 +29,7 @@ class GlobalWebSocket:
         """检查WebSocket连接是否活跃"""
         if client_id not in cls._connections:
             return False
-
+        
         websocket = cls._connections[client_id]
         try:
             # 检查WebSocket状态 - 使用更准确的检查方式
@@ -49,23 +49,27 @@ class GlobalWebSocket:
 
     @classmethod
     async def send_message(cls, client_id: str, message_type: Literal['text', 'progress'], content: str):
-        try:
-            websocket = cls._connections[client_id]
-            # 检查连接状态
-            if not cls.is_connection_active(client_id):
-                logger.warning(f"WebSocket连接 {client_id} 已断开，清理连接记录")
+        if client_id in cls._connections:
+            try:
+                websocket = cls._connections[client_id]
+                # 检查连接状态
+                if not cls.is_connection_active(client_id):
+                    logger.warning(f"WebSocket连接 {client_id} 已断开，清理连接记录")
+                    cls.remove_connection(client_id)
+                    return False
+                
+                await websocket.send_json({
+                    "type": message_type,
+                    "message": content
+                })
+                return True
+            except Exception as e:
+                logger.error(f"发送消息失败: {str(e)}")
+                # 发送失败时清理连接记录
                 cls.remove_connection(client_id)
                 return False
-
-            await websocket.send_json({
-                "type": message_type,
-                "message": content
-            })
-            return True
-        except Exception as e:
-            logger.error(f"发送消息失败: {str(e)}")
-            # 发送失败时清理连接记录
-            cls.remove_connection(client_id)
+        else:
+            logger.warning(f"WebSocket连接 {client_id} 不存在")
             return False
 
 

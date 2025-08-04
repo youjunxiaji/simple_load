@@ -14,16 +14,16 @@ import asyncio
 
 
 class CalSimpleLoad:
-    
+
     async def _update_progress_smoothly(self, start_progress: float, end_progress: float, duration: float = 1.0):
         """平滑更新进度条"""
         steps = int(duration * 10)  # 每0.1秒更新一次
         if steps <= 0:
             steps = 1
-        
+
         step_size = (end_progress - start_progress) / steps
         current_progress = start_progress
-        
+
         for i in range(steps):
             current_progress += step_size
             success = await ws.send_message('simple_load', 'progress', f"{round(current_progress, 1)}")
@@ -31,7 +31,7 @@ class CalSimpleLoad:
                 logger.warning("WebSocket连接断开，停止进度更新")
                 break
             await asyncio.sleep(0.1)
-        
+
         # 确保最终进度准确
         await ws.send_message('simple_load', 'progress', f"{round(end_progress, 1)}")
 
@@ -58,7 +58,7 @@ class CalSimpleLoad:
         """同步处理单个文件的函数"""
         file_path, header, conversion_factors, have_time = args
         df = pd.read_csv(
-            file_path, 
+            file_path,
             sep=r'\s+',
             header=conversion_factors['title_row'],
             names=header,
@@ -67,7 +67,7 @@ class CalSimpleLoad:
         # 使用numpy向量化操作替代pandas操作
         moment_cols = ['Mx[KNm]', 'My[KNm]', 'Mz[KNm]']
         force_cols = ['Fx[KN]', 'Fy[KN]', 'Fz[KN]']
-            
+
         df.loc[:, moment_cols] = df[moment_cols].values / conversion_factors['unit_moment']
         df.loc[:, force_cols] = df[force_cols].values / conversion_factors['unit_force']
         df['speed[rpm]'] *= conversion_factors['unit_speed']
@@ -123,7 +123,7 @@ class CalSimpleLoad:
         # 多进程处理
         await ws.send_message('simple_load', 'text', f"开始处理 {total_files} 个文件...")
         await ws.send_message('simple_load', 'progress', "0")
-        
+
         with ProcessPoolExecutor(max_workers=mp.cpu_count()) as executor:
             # 提交所有任务
             future_to_file = {
@@ -136,13 +136,13 @@ class CalSimpleLoad:
             for future in as_completed(future_to_file):
                 processed_files += 1
                 current_progress = round((processed_files / total_files) * 100, 1)
-                
+
                 # 如果进度变化超过5%或者是最后一个文件，才更新进度条
                 if current_progress - last_progress >= 5 or processed_files == total_files:
                     # 平滑更新进度条
                     await self._update_progress_smoothly(last_progress, current_progress, 0.5)
                     last_progress = current_progress
-                    
+
                     await ws.send_message('simple_load', 'text', f"已处理 {processed_files}/{total_files} 个文件")
 
                 result = future.result()
@@ -174,21 +174,19 @@ class CalSimpleLoad:
         )
         self.df_all = pd.concat(self.df_dic.values())
 
-    async def simple_load1(self,romax_origin):
+    async def simple_load1(self, romax_origin):
         """
         说明
         ---
         FUNC 划分区间
         """
         # 读取从Mx[Nm]~Fz[N]的最大最小值
-        logger.info(f"romax_origin: {romax_origin}")
         if self.df_all is not None:
             df_des = self.df_all.describe().T
         else:
             logger.error("df_all is None")
             return
         self.df_dest = pd.concat([df_des['min'], df_des['max']], axis=1)
-        # self.df_dest = df_dest.loc[["Fx[KN]", "Fy[KN]", "Fz[KN]", "My[KNm]", "Mz[KNm]"], :]
 
         # 定义要处理的列
         moment_cols = ['Mx[KNm]', 'My[KNm]', 'Mz[KNm]']
@@ -220,10 +218,13 @@ class CalSimpleLoad:
 
     async def savePic(self):
         """使用numpy优化但保持与pandas结果一致"""
+
         columns = ["Fx[KN]", "Fy[KN]", "Fz[KN]", "Mx[KNm]", "My[KNm]", "Mz[KNm]"]
+        if self.df_ref is None or self.df_dic is None:
+            return {"message": "请先加载文件", "status": "error"}
         weights = {i: self.df_ref.loc[i, '工况占比'] for i in self.df_dic.keys()}
         result_dict = {}
-        
+
         await ws.send_message('simple_load', 'text', "开始生成图表数据...")
         await ws.send_message('simple_load', 'progress', "0")
 
@@ -259,8 +260,10 @@ class CalSimpleLoad:
         await ws.send_message('simple_load', 'text', "图表数据生成完成")
         return result_dict
 
-    async def simple_load2(self, table_data, romax_origin):
+    async def simple_load2(self, table_data, romax_origin: Dict):
         # FUNC 载荷缩减
+        if self.df_all is None or self.df_ref is None:
+            return {"message": "请先加载文件", "status": "error"}
         await ws.send_message('simple_load', 'text', "开始载荷缩减处理...")
         await self._update_progress_smoothly(0, 10, 0.5)
         # 优化数据提取
@@ -268,23 +271,49 @@ class CalSimpleLoad:
             [float(value) for value in row.values() if value != '']
             for row in table_data
         ]
-        fx, fy, fz, my, mz = lists
 
-        for label_name, col_name, bins in [
-            ('fx_label', 'Fx[KN]', fx),
-            ('fy_label', 'Fy[KN]', fy),
-            ('fz_label', 'Fz[KN]', fz),
-            ('my_label', 'My[KNm]', my),
-            ('mz_label', 'Mz[KNm]', mz)
-        ]:
+        # 动态规划方式：根据 romax_origin 确定要排除的轴
+        # 找到 romax 中 z 对应的 origin 轴
+        z_corresponds_to = romax_origin[2]['origin'].replace("-", "")
+
+        # 定义所有可能的分量和其对应的轴
+        all_components = [
+            ('fx', 'Fx[KN]', 'x'),    # (变量名, 列名, 对应轴)
+            ('fy', 'Fy[KN]', 'y'),
+            ('fz', 'Fz[KN]', 'z'),
+            ('mx', 'Mx[KNm]', 'x'),
+            ('my', 'My[KNm]', 'y'),
+            ('mz', 'Mz[KNm]', 'z')
+        ]
+
+        # 动态筛选：排除 z 对应轴的力矩分量
+        selected_components = []
+        for comp_name, col_name, axis in all_components:
+            # 如果是力矩分量且其轴是z对应的轴，则排除
+            if comp_name.startswith('m') and axis == z_corresponds_to:
+                continue
+            selected_components.append((comp_name, col_name, axis))
+
+        # 动态构建标签映射和数据分配
+        label_mappings = []
+        for i, (comp_name, col_name, axis) in enumerate(selected_components):
+            if i < len(lists):  # 确保不超出数据范围
+                label_name = f"{comp_name}_label"
+                label_mappings.append((label_name, col_name, lists[i]))
+        for label_name, col_name, bins in label_mappings:
             # 检查是否单调
             if not all(x <= y for x, y in zip(bins[:-1], bins[1:])):
                 return {"message": f"{col_name}的区间值必须是单调递增的", "status": "error"}
 
             # 使用np.digitize并直接创建标签数组
             indices = np.digitize(self.df_all[col_name].values, bins) - 1
-            # 预先创建标签数组
-            labels = np.array([f'{label_name[0:2]}{i}' for i in range(1, len(bins))])
+            # 预先创建标签数组，确保包含所有可能的索引
+            max_possible_index = len(bins)  # digitize最大可能返回len(bins)，减1后最大为len(bins)-1
+            labels = np.array([f'{label_name[0:2]}{i}' for i in range(1, max_possible_index + 1)])
+
+            # 将越界的索引钳制到有效范围内（处理边界值问题）
+            indices = np.clip(indices, 0, len(labels) - 1)
+
             # 直接索引获取标签
             self.df_all[label_name] = labels[indices]
 
@@ -312,7 +341,7 @@ class CalSimpleLoad:
         data = df_final[value_list].values
         total_elements = data.size
         chunk_size = min(total_elements // 100, 1000000)  # 限制最大块大小
-        
+
         await ws.send_message('simple_load', 'text', "正在进行载荷转换计算...")
         last_progress_reported = 0
 
@@ -346,15 +375,16 @@ class CalSimpleLoad:
         await ws.send_message('simple_load', 'text', "载荷缩减完成")
         await ws.send_message('simple_load', 'text', "正在转换数据")
 
-        # 定义需要处理的列
-        speed_cols = ['speed[rpm]', 'My[KNm]', 'Mz[KNm]', 'Fx[KN]', 'Fy[KN]', 'Fz[KN]']
-        processed_cols = ['处理后_speed[rpm]', '处理后_My[KNm]', '处理后_Mz[KNm]', '处理后_Fx[KN]', '处理后_Fy[KN]', '处理后_Fz[KN]']
+        # 动态定义需要处理的列
+        dynamic_load_cols = [col_name for _, col_name, _ in label_mappings if 'KN' in col_name]
+        speed_cols = ['speed[rpm]'] + dynamic_load_cols
+        processed_cols = ['处理后_speed[rpm]'] + [f'处理后_{col}' for col in dynamic_load_cols]
 
         # 使用numpy广播代替apply
         grid_speed = df_final['格子转速'].values[:, np.newaxis]
         df_final[processed_cols] = df_final[speed_cols].values * grid_speed
-        # 优化pivot_table操作
-        index_cols = ['fx_label', 'fy_label', 'fz_label', 'my_label', 'mz_label']
+        # 优化pivot_table操作 - 使用动态生成的标签列
+        index_cols = [label_name for label_name, _, _ in label_mappings]
         value_cols = processed_cols + ['格子转速', '格子时间']
 
         # 执行 pivot_table
@@ -388,9 +418,8 @@ class CalSimpleLoad:
 
         # 合并数据框并优化map操作
         df_pivot = pd.concat([df_pivot, df_], axis=1)
-        # 向量化处理代替map
-        cols_to_process = ['My[KNm]', 'Mz[KNm]', 'Fx[KN]', 'Fy[KN]', 'Fz[KN]']
-        data = df_pivot[cols_to_process].values
+        # 向量化处理代替map - 使用动态生成的列名
+        data = df_pivot[dynamic_load_cols].values
         inv_factor = 1 / translate_factor
 
         # 分别处理正负值
@@ -408,14 +437,16 @@ class CalSimpleLoad:
         # 零值保持为0
         result[zero_mask] = 0
 
-        df_pivot.loc[:, cols_to_process] = result
+        df_pivot.loc[:, dynamic_load_cols] = result
 
         # 计算time(h)，使用numpy操作
         total_time = np.sum(self.df_ref['仿真时间（s）'].values * self.df_ref['全寿命发生次数'].values)
         df_pivot['time(h)'] = df_pivot['时间占比'].values * total_time / 3600
 
-        # 重排列并添加工况列
-        final_cols = ['time(h)', 'speed[rpm]', 'Fx[KN]', 'Fy[KN]', 'Fz[KN]', 'My[KNm]', 'Mz[KNm]', '时间占比', '格子转速']
+        # 重排列并添加工况列 - 动态构建列名
+        # 先确保所有需要的列都存在，对于缺失的分量用0填充
+
+        final_cols = ['time(h)', 'speed[rpm]'] + dynamic_load_cols + ['时间占比', '格子转速']
         df_pivot = df_pivot[final_cols]
 
         # 优化工况列创建和索引设置
@@ -424,7 +455,7 @@ class CalSimpleLoad:
             df_pivot
             .reset_index()
             .assign(工况=lambda x: [f'loc{i:03}' for i in loc_numbers])
-            .set_index(["fx_label", "fy_label", "fz_label", "my_label", "mz_label"])
+            .set_index(index_cols)  # 使用动态生成的标签列
         )
 
         await ws.send_message('simple_load', 'text', "正在保存Excel文件...")
@@ -439,13 +470,12 @@ class CalSimpleLoad:
         df_pivot_Romax['speed[rpm]'] = df_pivot['speed[rpm]']
 
         # TODO 增加载荷关系转换
-        df_pivot_Romax['Fx[KN]'] = -1 * df_pivot['Fx[KN]'.replace("x", condition[0]).replace("-", "")] if "-" in condition[0] else df_pivot['Fx[KN]'.replace("x", condition[0])]
-        df_pivot_Romax['Fy[KN]'] = -1 * df_pivot['Fy[KN]'.replace("y", condition[1]).replace("-", "")] if "-" in condition[1] else df_pivot['Fy[KN]'.replace("y", condition[1])]
-        df_pivot_Romax['Fz[KN]'] = -1 * df_pivot['Fz[KN]'.replace("z", condition[2]).replace("-", "")] if "-" in condition[2] else df_pivot['Fz[KN]'.replace("z", condition[2])]
-        df_pivot_Romax['Mx[KNm]'] = -1 * df_pivot['Mx[KNm]'.replace("x", condition[0]).replace("-", "")] if "-" in condition[0] else df_pivot['Mx[KNm]'.replace("x", condition[0])]
-        df_pivot_Romax['My[KNm]'] = -1 * df_pivot['My[KNm]'.replace("y", condition[1]).replace("-", "")] if "-" in condition[1] else df_pivot['My[KNm]'.replace("y", condition[1])]
+        cols_ = ['Fx[KN]', 'Fy[KN]', 'Fz[KN]', 'Mx[KNm]', 'My[KNm]']
+        for col in cols_:
+            condition_ = [x['origin'] for x in romax_origin if x['romax'] == col[1]][0]
+            df_pivot_Romax[col] = -1 * df_pivot[col.replace(col[1], condition_).replace("-", "")] if "-" in condition_ else df_pivot[col.replace(col[1], condition_)]
 
-        df_pivot_Romax_T = df_pivot_Romax[['工况', 'Fx[KN]', 'Fy[KN]', 'Fz[KN]', 'Mx[KNm]', 'My[KNm]']].T
+        df_pivot_Romax_T = df_pivot_Romax[['工况']+cols_].T
         with pd.ExcelWriter(f'{self.result_folder_save_path}/Load_Reduction_Romax-{excel_name}.xlsx') as writer:
             df_pivot_Romax[['工况', 'time(h)', '温度(C)', 'speed[rpm]']].to_excel(writer, sheet_name='工况表格定义', index=False)
             df_pivot_Romax_T.to_excel(writer, sheet_name='载荷', header=False)

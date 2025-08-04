@@ -49,10 +49,10 @@ if __name__ == "__main__":
     multiprocessing.freeze_support()  # 添加这行
     logger.info("启动服务器")
     uvicorn.run(
-        app="main:app",
-        reload=True,  # 启用热重载
-        reload_dirs=["./"],  # 监视的目录
-        # app=app,
+        # app="main:app",
+        # reload=True,  # 启用热重载
+        # reload_dirs=["./"],  # 监视的目录
+        app=app,
         host="0.0.0.0",
         port=9000,
         log_config=None

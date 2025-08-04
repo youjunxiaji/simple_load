@@ -67,3 +67,15 @@ class ConnectionManager:
                 }),
                 client_id
             )
+        elif command == "reset_instance":
+            # 处理重置实例命令
+            self.force_reset_instance(client_id)
+            await self.send_personal_message(
+                json.dumps({
+                    "type": "response",
+                    "command": "reset_instance",
+                    "status": "completed"
+                }),
+                client_id
+            )
+        # 添加其他命令处理...

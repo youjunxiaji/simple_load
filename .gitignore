@@ -1,3 +1,5 @@
 .DS_Store
 __pycache__/
 测试案例/
+output/
+software/

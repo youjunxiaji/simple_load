@@ -4,7 +4,7 @@ REM 切换到 UTF-8 编码
 chcp 65001
 
 REM 设置版本号环境变量
-set "APP_VERSION=1.0.4"
+set "APP_VERSION=1.0.5"
 echo 当前版本号: %APP_VERSION%
 
 REM 获取当前批处理文件所在的目录
@@ -19,7 +19,7 @@ pyinstaller ^
     --onedir ^
     --console ^
     --distpath "%current_dir%output" ^
-    --name "yjxj-%APP_VERSION%" ^
+    --name "simple_load-%APP_VERSION%" ^
     --icon "%current_dir%static/配置数据处理.ico" ^
     --add-data "%current_dir%app_simpleLoad;app_simpleLoad/" ^
     --add-data "%current_dir%my_websockets;my_websockets/" ^
@@ -52,13 +52,3 @@ if %errorlevel% neq 0 (
     goto :EOF
 )
 
-
-
-REM 使用scp命令传输文件（直接使用相对路径）
-scp "software\yjxj-%APP_VERSION%.exe" "成都天马【prod-gl】:/home/gl/code/tmb_web/django-tmb/media/software/"
-
-
-if %errorlevel% neq 0 (
-    echo 文件传输失败!
-    goto :EOF
-) 

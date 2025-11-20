@@ -43,6 +43,14 @@ class CalSimpleLoad:
             header: List[str],
             conversion_factors: Dict[str, float],
     ):
+        # 提前校验header，避免后续处理浪费资源
+        required_cols = {'Mx[KNm]', 'My[KNm]', 'Mz[KNm]', 'Fx[KN]', 'Fy[KN]', 'Fz[KN]', 'speed[rpm]'}
+
+        # 检查是否缺少必需列
+        missing_cols = required_cols - set(header)
+        if missing_cols:
+            raise ValueError(f"标题配置错误：缺少必需的列 {list(missing_cols)}")
+
         self.result_folder_save_path = result_folder_save_path  # 结果文件夹保存路径
         self.load_file_folder_path = load_file_folder_path  # 时序载荷文件夹
         self.freq_table_path = freq_table_path  # 频次表位置
@@ -57,13 +65,20 @@ class CalSimpleLoad:
     def _process_single_file_sync(self, args):
         """同步处理单个文件的函数"""
         file_path, header, conversion_factors, have_time = args
+
+        # 根据header长度限制读取的列数，只读取前N列（N=len(header)）
         df = pd.read_csv(
             file_path,
             sep=r'\s+',
             header=conversion_factors['title_row'],
             names=header,
             dtype=float,
+            usecols=range(len(header))  # 只读取前len(header)列
         )
+
+        # 扔掉一切包含占位符的列
+        df = df.loc[:, ~df.columns.str.contains('占位符')]
+        
         # 使用numpy向量化操作替代pandas操作
         moment_cols = ['Mx[KNm]', 'My[KNm]', 'Mz[KNm]']
         force_cols = ['Fx[KN]', 'Fy[KN]', 'Fz[KN]']

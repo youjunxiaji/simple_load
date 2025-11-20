@@ -46,14 +46,20 @@ async def load_file(request: Request, data_: Dict):
         manager.cal_instance = instance
         logger.info("创建新的 CalSimpleLoad 实例，WebSocket连接正常")
     
-    instance.setInit(
-        result_folder_save_path=data_['file_path']['result_folder_save_path'],
-        load_file_folder_path=data_['file_path']['load_file_folder_path'],
-        freq_table_path=data_['file_path']['freq_table_path'],
-        header=[item['name'] for item in data_['draggableElements']],
-        conversion_factors=data_['conversion_factors'],
-
-    )
+    try:
+        instance.setInit(
+            result_folder_save_path=data_['file_path']['result_folder_save_path'],
+            load_file_folder_path=data_['file_path']['load_file_folder_path'],
+            freq_table_path=data_['file_path']['freq_table_path'],
+            header=[item['name'] for item in data_['draggableElements']],
+            conversion_factors=data_['conversion_factors'],
+        )
+    except ValueError as e:
+        # 捕获header配置错误
+        error_msg = str(e)
+        logger.error(error_msg)
+        return {"message": error_msg, "status": "error"}
+    
     await instance.simple_Pre_processing()
     logger.warning(f'第一步内存增加: {log_all_processes_memory() - m} MB')
     return {"message": "读取文件完成", "status": "success"}

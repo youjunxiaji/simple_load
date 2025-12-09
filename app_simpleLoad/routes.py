@@ -5,7 +5,6 @@ from loguru import logger
 from typing import Dict
 
 from app_simpleLoad.module.cal_simpleLoad import CalSimpleLoad
-from utils import log_all_processes_memory
 from my_websockets.global_ws import ws
 
 router = APIRouter()
@@ -18,7 +17,6 @@ async def load_file(request: Request, data_: Dict):
     ---
     FUNC 加载文件
     """
-    m = log_all_processes_memory()
     manager = request.app.state.websocket_manager
     instance: CalSimpleLoad | None = manager.cal_instance
     
@@ -61,7 +59,6 @@ async def load_file(request: Request, data_: Dict):
         return {"message": error_msg, "status": "error"}
     
     await instance.simple_Pre_processing()
-    logger.warning(f'第一步内存增加: {log_all_processes_memory() - m} MB')
     return {"message": "读取文件完成", "status": "success"}
 
 
@@ -72,7 +69,6 @@ async def simple_pre_processing(request: Request, data: Dict):
     ---
     FUNC 划分区间
     """
-    m = log_all_processes_memory()
     manager = request.app.state.websocket_manager
     instance: CalSimpleLoad | None = manager.cal_instance
     
@@ -83,7 +79,6 @@ async def simple_pre_processing(request: Request, data: Dict):
     try:
         min_max = await instance.simple_load1(data.get('romax_origin', []))
         echarts_data = await instance.savePic()
-        logger.warning(f'第二步内存增加: {log_all_processes_memory() - m} MB')
     except AttributeError as e:
         return {"message": f"请先加载文件", "status": "error"}
     return {

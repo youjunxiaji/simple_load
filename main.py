@@ -9,6 +9,11 @@ from my_websockets import socket_routes
 from app_simpleLoad.routes import router as simple_load_router
 from my_websockets.socket_manager import ConnectionManager
 import multiprocessing
+import pandas as pd
+
+# 启用 Pandas Copy-on-Write 模式，优化内存使用
+# 参考: https://pandas.pydata.org/docs/user_guide/copy_on_write.html
+pd.options.mode.copy_on_write = True
 
 # 配置 loguru
 logger.remove()  # 移除默认的处理器
@@ -49,7 +54,7 @@ def show_startup_banner(host="localhost", port=9000):
     """显示简洁的启动信息"""
     import os
     python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
-    app_version = os.getenv("APP_VERSION", "1.0.5")  # 从环境变量获取版本号
+    app_version = os.getenv("APP_VERSION", "1.0.7")  # 从环境变量获取版本号
     
     print("=" * 60)
     print("🚀 SIMPLE LOAD SYSTEM - 载荷简化计算系统")

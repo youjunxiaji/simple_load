@@ -4,7 +4,7 @@ REM 切换到 UTF-8 编码
 chcp 65001
 
 REM 设置版本号环境变量
-set "APP_VERSION=1.0.7"
+set "APP_VERSION=1.0.8"
 echo 当前版本号: %APP_VERSION%
 
 REM 获取当前批处理文件所在的目录

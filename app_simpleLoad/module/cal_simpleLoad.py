@@ -2,7 +2,6 @@
 Polars 版本的载荷简化计算模块
 使用 Polars 替代 Pandas 以获得更好的内存效率和性能
 """
-from PySide6.QtCore import *
 import os
 import polars as pl
 import numpy as np
@@ -92,22 +91,23 @@ class CalSimpleLoad:
         """同步处理单个文件的函数 - Polars 版本"""
         file_path, header, conversion_factors, have_time = args
         
-        # 过滤掉占位符列
+        # 过滤掉占位符列，获取有效列名和索引
+        # 例如 header = ['A', 'B', '占位符', 'C', '占位符', '占位符']
+        # → valid_cols = ['A', 'B', 'C']
+        # → valid_indices = [0, 1, 3]
         valid_cols = [col for col in header if '占位符' not in col]
+        valid_indices = [i for i, col in enumerate(header) if '占位符' not in col]
         
-        # 使用 pandas 读取（因为 polars 对空格分隔支持不好）然后转换
-        import pandas as pd_local
-        df_pd = pd_local.read_csv(
+        # 使用 pandas 读取（因为 polars 对空格分隔支持不好）
+        # usecols 直接指定只读取需要的列，避免读取占位符列
+        df_pd = pd.read_csv(
             file_path,
             sep=r'\s+',
             header=conversion_factors['title_row'],
-            names=header,
+            names=valid_cols,
             dtype=float,
-            usecols=range(len(header))
+            usecols=valid_indices
         )
-        
-        # 只保留有效列
-        df_pd = df_pd.loc[:, ~df_pd.columns.str.contains('占位符')]
         
         # 转换为 Polars（零拷贝如果数据类型兼容）
         df = pl.from_pandas(df_pd)

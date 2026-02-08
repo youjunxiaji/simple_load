@@ -53,14 +53,12 @@ app.include_router(socket_routes.router)  # WebSocket 路由
 
 def show_startup_banner(host="localhost", port=9000):
     """显示简洁的启动信息"""
-    import os
     python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
-    app_version = os.getenv("APP_VERSION")  # 从环境变量获取版本号
     
     print("=" * 60)
     print("🚀 SIMPLE LOAD SYSTEM - 载荷简化计算系统")
     print("=" * 60)
-    print(f"系统版本:       {app_version}")
+    print(f"系统版本:       1.0.8")
     print(f"开发团队:       Lei Gu & Hengshan Liu")
     print(f"Python版本:     {python_version}")
     print(f"FastAPI:        最新版")

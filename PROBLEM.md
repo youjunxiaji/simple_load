@@ -4,10 +4,24 @@
 
 ---
 
-## P1: 内存占用过高
+## P1: 内存占用过高 ✅ 已优化
 
 **严重程度**: 高  
-**表现**: 处理 2GB 的 TXT 文件集合时，进程内存峰值超过 6GB
+**表现**: 处理 4.8GB 的 TXT 文件集合（699 个文件，8,120,604 行 × 9 列）时，进程内存峰值过高
+
+### 优化结果
+
+| 指标 | 优化前 | 优化后 | 改善 |
+|------|-------|-------|------|
+| 预处理峰值 | ~3-4GB | 718MB | ~75% |
+| 载荷缩减峰值 | 6GB+ | 2.9GB | ~52% |
+| 最终内存 | - | 1.7GB | - |
+
+**已实施的优化措施**：
+1. ProcessPoolExecutor → ThreadPoolExecutor + asyncio（消除 pickle 序列化开销）
+2. 去掉 df_dic 双重存储（只保留 df_all）
+3. join 后立刻释放 df_all（避免与 df_final 共存）
+4. float32 替代 float64（数据内存减半）
 
 ### 原因分析
 
@@ -82,10 +96,12 @@ df_final = self.df_all.join(self.df_ref, on='文件名', how='left')
 
 ---
 
-## P2: 事件循环阻塞
+## P2: 事件循环阻塞 ✅ 已修复
 
 **严重程度**: 中  
 **表现**: 文件处理期间 WebSocket 进度推送可能延迟或卡顿
+
+> **已修复**：使用 asyncio + ThreadPoolExecutor 替代 ProcessPoolExecutor，`await` 让出控制权，WebSocket 推送不再被阻塞。
 
 ### 原因分析
 
@@ -105,10 +121,12 @@ for future in as_completed(future_to_file):   # ← 同步阻塞调用
 
 ---
 
-## P3: pyproject.toml 依赖不完整
+## P3: pyproject.toml 依赖不完整 ✅ 已修复
 
 **严重程度**: 低  
 **表现**: 新环境安装依赖后无法运行
+
+> **已修复**：补全 numpy、openpyxl、websockets 等缺失依赖。
 
 ### 原因分析
 
@@ -157,10 +175,12 @@ dependencies = [
 
 ---
 
-## P5: main.py 中不必要的 import
+## P5: main.py 中不必要的 import ✅ 已修复
 
 **严重程度**: 低  
 **表现**: 启动时加载不必要的包，增加启动时间
+
+> **已修复**：移除 main.py 中的 `import pandas` 和 `import pyarrow`，Pandas 3.0+ 已默认开启 Copy-on-Write，无需手动配置。
 
 ### 原因分析
 

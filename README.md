@@ -59,8 +59,14 @@ simple_load/
 │
 ├── app_simpleLoad/                  # 核心业务模块
 │   ├── routes.py                    # API 路由定义（3 个接口）
+│   ├── core/                        # 核心基础模块
+│   │   ├── config.py                # 配置数据类（PathConfig, ConversionConfig 等）
+│   │   ├── memory.py                # 内存监控工具（可通过 --debug 启用）
+│   │   └── progress.py              # WebSocket 进度推送封装
+│   ├── services/                    # 业务服务层
+│   │   └── file_reader.py           # 异步文件读取（ThreadPool + asyncio）
 │   └── module/
-│       └── cal_simpleLoad.py        # 载荷简化计算核心逻辑
+│       └── cal_simpleLoad.py        # 载荷简化计算编排层
 │
 ├── my_websockets/                   # WebSocket 模块
 │   ├── global_ws.py                 # 全局 WebSocket 单例（进度推送）
@@ -102,6 +108,14 @@ uv run python main.py
 - HTTP 服务：`http://localhost:9000`
 - WebSocket：`ws://localhost:9000/ws/{client_id}`
 - API 文档：`http://localhost:9000/docs`
+
+#### Debug 模式
+
+添加 `--debug` 参数启用内存监控日志：
+
+```bash
+uv run python main.py --debug
+```
 
 ---
 

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Request
 from loguru import logger
 from typing import Dict
 
+from app_simpleLoad.core.config import PathConfig, ConversionConfig
 from app_simpleLoad.module.cal_simpleLoad import CalSimpleLoad
 from my_websockets.global_ws import ws
 
@@ -45,12 +46,17 @@ async def load_file(request: Request, data_: Dict):
         logger.info("创建新的 CalSimpleLoad 实例，WebSocket连接正常")
     
     try:
-        instance.setInit(
+        paths = PathConfig(
             result_folder_save_path=data_['file_path']['result_folder_save_path'],
             load_file_folder_path=data_['file_path']['load_file_folder_path'],
             freq_table_path=data_['file_path']['freq_table_path'],
+        )
+        config = ConversionConfig(**data_['conversion_factors'])
+
+        instance.setInit(
+            paths=paths,
             header=[item['name'] for item in data_['draggableElements']],
-            conversion_factors=data_['conversion_factors'],
+            config=config,
         )
     except ValueError as e:
         # 捕获header配置错误

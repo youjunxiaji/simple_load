@@ -57,7 +57,7 @@ def show_startup_banner(host="localhost", port=9000):
     info_table = Table(show_header=False, box=None, padding=(0, 1))
     info_table.add_column("key", style="bold cyan", width=10, justify="right")
     info_table.add_column("value")
-    info_table.add_row("版本", "1.0.8")
+    info_table.add_row("版本", "v1.1.0")
     info_table.add_row("团队", "Lei Gu & Hengshan Liu")
     info_table.add_row("Python", python_version)
 

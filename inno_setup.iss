@@ -5,7 +5,7 @@
 #define MyAppVersion GetEnv("APP_VERSION")
 #define MyAppPublisher "gulei"
 #define MyAppExeName "simple_load.exe"
-#define MyAppURL "E:\desktop\测试文件\simple_load"
+#define MyAppURL RemoveBackslash(SourcePath)
 #define MyAppProtocol "tmb-app"  ; 定义自定义协议名称
 
 [Setup]

@@ -4,7 +4,7 @@ REM 切换到 UTF-8 编码
 chcp 65001
 
 REM 设置版本号环境变量
-set "APP_VERSION=v1.1.0"
+set "APP_VERSION=1.1.0"
 echo 当前版本号: %APP_VERSION%
 
 REM 获取当前批处理文件所在的目录
@@ -14,7 +14,7 @@ REM 创建输出目录（如果不存在）
 if not exist "%current_dir%output" mkdir "%current_dir%output"
 
 REM 执行PyInstaller命令
-pyinstaller ^
+uv run pyinstaller ^
     --noconfirm ^
     --onedir ^
     --console ^
@@ -23,6 +23,12 @@ pyinstaller ^
     --icon "%current_dir%static/配置数据处理.ico" ^
     --add-data "%current_dir%app_simpleLoad;app_simpleLoad/" ^
     --add-data "%current_dir%my_websockets;my_websockets/" ^
+    --collect-all numpy ^
+    --collect-all rich ^
+    --hidden-import numpy ^
+    --hidden-import numpy._core ^
+    --hidden-import numpy._core.multiarray ^
+    --hidden-import numpy._core._multiarray_umath ^
     "%current_dir%main.py"
 
 REM 删除 build 文件夹和 .spec 文件
@@ -37,7 +43,8 @@ if %errorlevel% neq 0 (
 
 
 REM 加密代码
-py2pyd -f "%current_dir%output" -d
+py2pyd -f "%current_dir%output/simple_load/_internal/app_simpleLoad" -d
+py2pyd -f "%current_dir%output/simple_load/_internal/my_websockets" -d
 
 if %errorlevel% neq 0 (
     echo 代码加密失败，退出脚本

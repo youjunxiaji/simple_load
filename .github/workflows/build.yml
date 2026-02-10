@@ -68,6 +68,8 @@ jobs:
 
       # ─── py2pyd 代码加密 ───────────────────────────────────
       - name: Encrypt Python files with py2pyd
+        env:
+          PYTHONUTF8: "1"
         run: |
           uv run py2pyd -r -d --no-confirm "output/simple_load/_internal/app_simpleLoad"
           uv run py2pyd -r -d --no-confirm "output/simple_load/_internal/my_websockets"

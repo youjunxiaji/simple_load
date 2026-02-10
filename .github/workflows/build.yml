@@ -67,6 +67,9 @@ jobs:
           Get-ChildItem "*.spec" | Remove-Item -Force
 
       # ─── py2pyd 代码加密 ───────────────────────────────────
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Encrypt Python files with py2pyd
         env:
           PYTHONUTF8: "1"

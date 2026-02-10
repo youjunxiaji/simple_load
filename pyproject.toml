@@ -7,7 +7,7 @@ requires-python = ">=3.11"
 dependencies = [
     "cython>=3.2.4",
     "fastapi>=0.128.4",
-    "gl-py2pyd>=0.3.0",
+    "gl-py2pyd>=0.3.2",
     "numpy>=2.4.2",
     "openpyxl>=3.1.0",
     "pandas>=3.0.0",

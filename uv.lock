@@ -132,7 +132,7 @@ wheels = [
 
 [[package]]
 name = "gl-py2pyd"
-version = "0.3.1"
+version = "0.3.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cython" },
@@ -140,9 +140,9 @@ dependencies = [
     { name = "rich" },
     { name = "setuptools" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/42/dc/86cfbab12b4a9600a87bb8369a15cbaeb1da87eb9d18b186249422d40185/gl_py2pyd-0.3.1.tar.gz", hash = "sha256:66635bde779604ccaf9fb1f8203766517a5534f3947040bb49ace5d81fcaf57f", size = 7756, upload-time = "2026-02-10T14:54:44.005Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/fc/90/a9af13573e8492f9c78c517b72cac6f87e19446ac1b714cd6776dec2a944/gl_py2pyd-0.3.2.tar.gz", hash = "sha256:f3f06be0ae35a74daa7b912a313312483950bd11af4b95a2dbe2056b5898e011", size = 7756, upload-time = "2026-02-10T15:22:58.122Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/92/8c/aec7522adfc56c41bbc4b5be106b18cebb8a8b9c6ba2afe3b9716f33db69/gl_py2pyd-0.3.1-py3-none-any.whl", hash = "sha256:c360407472a0616cc366fe2751201d315ae1059c532d0b49fd0e70dda15d395e", size = 9400, upload-time = "2026-02-10T14:54:42.405Z" },
+    { url = "https://files.pythonhosted.org/packages/1c/91/bd8bca1c4663ca6e93487c07b15518f13b12de33528140143be403310bc2/gl_py2pyd-0.3.2-py3-none-any.whl", hash = "sha256:016e4678b03afdf1dfb53ab85de75ee749fbdb06d90ffcd158e3b7512690f008", size = 9409, upload-time = "2026-02-10T15:22:56.341Z" },
 ]
 
 [[package]]
@@ -734,7 +734,7 @@ dependencies = [
 requires-dist = [
     { name = "cython", specifier = ">=3.2.4" },
     { name = "fastapi", specifier = ">=0.128.4" },
-    { name = "gl-py2pyd", specifier = ">=0.3.0" },
+    { name = "gl-py2pyd", specifier = ">=0.3.2" },
     { name = "numpy", specifier = ">=2.4.2" },
     { name = "openpyxl", specifier = ">=3.1.0" },
     { name = "pandas", specifier = ">=3.0.0" },

@@ -132,7 +132,7 @@ wheels = [
 
 [[package]]
 name = "gl-py2pyd"
-version = "0.3.0"
+version = "0.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cython" },
@@ -140,9 +140,9 @@ dependencies = [
     { name = "rich" },
     { name = "setuptools" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/0e/77/71a07cd7ab5c1bbd5d4eb17adef78b7764b43d751e9429c3297e3fe32712/gl_py2pyd-0.3.0.tar.gz", hash = "sha256:e972c9f45c8d01dcd4cdb2828e9fd244db209ed3b73db8b6cc3d30890976b82f", size = 7367, upload-time = "2026-02-09T08:21:14.964Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/42/dc/86cfbab12b4a9600a87bb8369a15cbaeb1da87eb9d18b186249422d40185/gl_py2pyd-0.3.1.tar.gz", hash = "sha256:66635bde779604ccaf9fb1f8203766517a5534f3947040bb49ace5d81fcaf57f", size = 7756, upload-time = "2026-02-10T14:54:44.005Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/8a/4a/a5a389766d11cc99a29f161e0f1cd06aea726d224f76fb028d52e235f458/gl_py2pyd-0.3.0-py3-none-any.whl", hash = "sha256:7ec8531c1332584f28d664724ec334c57972416c9fc65328b19f7fd5453b84e2", size = 8902, upload-time = "2026-02-09T08:21:13.956Z" },
+    { url = "https://files.pythonhosted.org/packages/92/8c/aec7522adfc56c41bbc4b5be106b18cebb8a8b9c6ba2afe3b9716f33db69/gl_py2pyd-0.3.1-py3-none-any.whl", hash = "sha256:c360407472a0616cc366fe2751201d315ae1059c532d0b49fd0e70dda15d395e", size = 9400, upload-time = "2026-02-10T14:54:42.405Z" },
 ]
 
 [[package]]

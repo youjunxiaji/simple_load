@@ -7,8 +7,10 @@ import os
 import polars as pl
 import numpy as np
 from typing import List, Dict
-from loguru import logger
+from app_simpleLoad.core.logger import get_logger
 import gc
+
+logger = get_logger(__name__)
 import pandas as pd  # 仅用于 Excel 输出和 IntervalIndex
 
 from app_simpleLoad.core.config import PathConfig, ConversionConfig
@@ -287,11 +289,7 @@ class CalSimpleLoad:
             how='left'
         )
 
-        # 立刻释放 df_all（join 后已不需要，避免与 df_final 同时占用内存）
-        self.df_all = None
-        gc.collect()
-
-        log_memory("载荷缩减-join后(df_all已释放)", memory_start)
+        log_memory("载荷缩减-join后", memory_start)
 
         # 向量化计算
         df_final = df_final.with_columns([

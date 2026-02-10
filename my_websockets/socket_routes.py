@@ -1,7 +1,9 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from .socket_manager import ConnectionManager
-from loguru import logger
+from app_simpleLoad.core.logger import get_logger
 import json
+
+logger = get_logger(__name__)
 
 router = APIRouter()
 

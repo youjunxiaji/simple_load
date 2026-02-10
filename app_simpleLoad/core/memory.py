@@ -19,8 +19,10 @@
 
 import threading
 import time
-from loguru import logger
+from app_simpleLoad.core.logger import get_logger
 import psutil
+
+logger = get_logger(__name__)
 
 # ─── 全局开关（默认关闭，生产环境无性能开销） ──────────────
 
@@ -59,10 +61,10 @@ def log_memory(stage: str, memory_start: dict | None = None) -> dict:
     if memory_start:
         delta_rss = current["rss"] - memory_start["rss"]
         logger.info(
-            f"📊 [{stage}] 内存: {current['rss']:.1f}MB (变化: {delta_rss:+.1f}MB)"
+            f"[{stage}] 内存: {current['rss']:.1f}MB (变化: {delta_rss:+.1f}MB)"
         )
     else:
-        logger.info(f"📊 [{stage}] 内存: {current['rss']:.1f}MB")
+        logger.info(f"[{stage}] 内存: {current['rss']:.1f}MB")
     return current
 
 
@@ -114,7 +116,7 @@ class MemoryMonitor:
         }
         if _enabled:
             logger.info(
-                f"📊 [{self._label}] "
+                f"[{self._label}] "
                 f"当前: {current:.1f}MB, "
                 f"峰值: {self._peak_rss:.1f}MB, "
                 f"变化: {result['delta']:+.1f}MB"

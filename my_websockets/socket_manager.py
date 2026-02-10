@@ -1,7 +1,9 @@
 from fastapi import WebSocket
 from typing import Dict
-from loguru import logger
+from app_simpleLoad.core.logger import get_logger
 import json
+
+logger = get_logger(__name__)
 from app_simpleLoad.module.cal_simpleLoad import CalSimpleLoad
 from .global_ws import ws
 

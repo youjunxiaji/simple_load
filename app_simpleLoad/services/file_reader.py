@@ -15,9 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 import polars as pl
 import pandas as pd
-from loguru import logger
-
-from app_simpleLoad.core.config import ConversionConfig, FileResult
+from app_simpleLoad.core.config import ConversionConfig, FileResult, FileParseError
 from app_simpleLoad.core.progress import ProgressReporter
 
 # 模块级线程池（复用，避免反复创建销毁）
@@ -36,14 +34,26 @@ def _parse_single_file(
     valid_indices = [i for i, col in enumerate(header) if "占位符" not in col]
 
     # pandas 读取空格分隔 TXT（float32 省一半内存，精度对工程载荷足够）
-    df_pd = pd.read_csv(
-        file_path,
-        sep=r"\s+",
-        header=config.title_row,
-        names=valid_cols,
-        dtype=np.float32,
-        usecols=valid_indices,
-    )
+    file_name = os.path.basename(file_path)
+    try:
+        df_pd = pd.read_csv(
+            file_path,
+            sep=r"\s+",
+            header=config.title_row,
+            names=valid_cols,
+            dtype=np.float32,
+            usecols=valid_indices,
+        )
+    except (ValueError, TypeError) as e:
+        raise FileParseError(
+            filename=file_name,
+            reason=f"{e}，请检查 标题行 配置是否与文件列数匹配",
+        ) from e
+    except Exception as e:
+        raise FileParseError(
+            filename=file_name,
+            reason=str(e),
+        ) from e
 
     # 转为 Polars（后续用 Polars 做高性能计算）
     df = pl.from_pandas(df_pd)
@@ -69,8 +79,8 @@ def _parse_single_file(
         ]
     )
 
-    file_name = os.path.basename(file_path)[:-4]
-    df = df.with_columns(pl.lit(file_name).alias("文件名"))
+    file_name_no_ext = os.path.basename(file_path)[:-4]
+    df = df.with_columns(pl.lit(file_name_no_ext).alias("文件名"))
 
     # 时间信息
     row_count = df.height
@@ -78,9 +88,9 @@ def _parse_single_file(
         time_col = df["Time[s]"]
         var_time = float(time_col[-1] - time_col[0])
         var_interval = var_time / (row_count - 1)
-        return FileResult(file_name, df, row_count, var_time, var_interval)
+        return FileResult(file_name_no_ext, df, row_count, var_time, var_interval)
     else:
-        return FileResult(file_name, df, row_count)
+        return FileResult(file_name_no_ext, df, row_count)
 
 
 async def read_all_txt_files(
@@ -148,12 +158,19 @@ async def read_all_txt_files(
 
 def read_freq_table(freq_table_path: str, have_time: bool) -> pl.DataFrame:
     """读取 Excel 频次表，返回 Polars DataFrame"""
-    df_ref_pd = pd.read_excel(
-        freq_table_path,
-        names=["文件名", "全寿命发生次数", "仿真时间（s）"],
-        header=0,
-        dtype={"文件名": str},
-    )
+    try:
+        df_ref_pd = pd.read_excel(
+            freq_table_path,
+            names=["文件名", "全寿命发生次数", "仿真时间（s）"],
+            header=0,
+            dtype={"文件名": str},
+        )
+    except Exception as e:
+        raise FileParseError(
+            filename=os.path.basename(freq_table_path),
+            reason=str(e),
+        ) from e
+
     df_ref = pl.from_pandas(df_ref_pd)
     del df_ref_pd
 

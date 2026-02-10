@@ -4,7 +4,7 @@ REM 切换到 UTF-8 编码
 chcp 65001
 
 REM 设置版本号环境变量
-set "APP_VERSION=1.1.0"
+set "APP_VERSION=1.2.0"
 echo 当前版本号: %APP_VERSION%
 
 REM 获取当前批处理文件所在的目录
@@ -42,9 +42,9 @@ if %errorlevel% neq 0 (
 
 
 
-REM 加密代码
-py2pyd -f "%current_dir%output/simple_load/_internal/app_simpleLoad" -d
-py2pyd -f "%current_dir%output/simple_load/_internal/my_websockets" -d
+REM 加密代码（递归转换，转换后删除原始 .py，跳过确认）
+uv run py2pyd -r -d --no-confirm "%current_dir%output/simple_load/_internal/app_simpleLoad"
+uv run py2pyd -r -d --no-confirm "%current_dir%output/simple_load/_internal/my_websockets"
 
 if %errorlevel% neq 0 (
     echo 代码加密失败，退出脚本

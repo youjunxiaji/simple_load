@@ -2,7 +2,9 @@
 
 import asyncio
 from my_websockets.global_ws import ws
-from loguru import logger
+from app_simpleLoad.core.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class ProgressReporter:

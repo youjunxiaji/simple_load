@@ -1,10 +1,12 @@
 import json
 import asyncio
 from fastapi import APIRouter, Request
-from loguru import logger
+from app_simpleLoad.core.logger import get_logger
 from typing import Dict
 
-from app_simpleLoad.core.config import PathConfig, ConversionConfig
+logger = get_logger(__name__)
+
+from app_simpleLoad.core.config import PathConfig, ConversionConfig, FileParseError
 from app_simpleLoad.module.cal_simpleLoad import CalSimpleLoad
 from my_websockets.global_ws import ws
 
@@ -63,8 +65,16 @@ async def load_file(request: Request, data_: Dict):
         error_msg = str(e)
         logger.error(error_msg)
         return {"message": error_msg, "status": "error"}
-    
-    await instance.simple_Pre_processing()
+
+    try:
+        await instance.simple_Pre_processing()
+    except FileParseError as e:
+        logger.error(str(e))
+        return {"message": str(e), "status": "error"}
+    except Exception as e:
+        logger.error(f"文件加载过程中发生未知错误: {e}")
+        return {"message": f"文件加载失败: {e}", "status": "error"}
+
     return {"message": "读取文件完成", "status": "success"}
 
 
@@ -105,7 +115,12 @@ async def simple_load(request: Request, data: Dict):
     if instance is None:
         return {"message": "请先加载文件", "status": "error"}
     
-    msg = await instance.simple_load2(data['tableData'], data['romax_origin'])
+    try:
+        msg = await instance.simple_load2(data['tableData'], data['romax_origin'])
+    except Exception as e:
+        logger.error(f"载荷缩减过程中发生错误: {e}")
+        return {"message": f"载荷缩减失败: {e}", "status": "error"}
+
     if isinstance(msg, dict):
         return {**msg, "status": "error"}
     return {"message": "载荷简化处理全部完成", "count": msg}

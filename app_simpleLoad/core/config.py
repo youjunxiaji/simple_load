@@ -4,6 +4,19 @@ from dataclasses import dataclass
 import polars as pl
 
 
+# ─── 自定义异常 ──────────────────────────────────────────────
+
+class FileParseError(Exception):
+    """文件解析失败异常（携带文件名和原始错误信息）"""
+
+    def __init__(self, filename: str, reason: str):
+        self.filename = filename
+        self.reason = reason
+        super().__init__(f"文件 {filename} 解析失败: {reason}")
+
+
+# ─── 数据类 ─────────────────────────────────────────────────
+
 @dataclass
 class PathConfig:
     """路径配置"""

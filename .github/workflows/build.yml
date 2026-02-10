@@ -1,0 +1,87 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - "v*"  # 推送 v 开头的 tag 时触发（如 v1.1.0）
+
+permissions:
+  contents: write  # 创建 Release 需要写权限
+
+jobs:
+  build:
+    name: Build Windows Installer
+    runs-on: windows-latest
+
+    steps:
+      # ─── 基础环境 ──────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      # ─── 提取版本号 ────────────────────────────────────────
+      - name: Extract version from tag
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}" -replace '^v', ''
+          echo "APP_VERSION=$version" >> $env:GITHUB_ENV
+          echo "Version: $version"
+
+      # ─── 安装依赖 ──────────────────────────────────────────
+      - name: Install dependencies
+        run: |
+          uv sync
+          uv add gl-py2pyd --dev
+
+      # ─── PyInstaller 打包 ──────────────────────────────────
+      - name: Build with PyInstaller
+        run: |
+          uv run pyinstaller `
+            --noconfirm `
+            --onedir `
+            --console `
+            --distpath "output" `
+            --name "simple_load" `
+            --icon "static/配置数据处理.ico" `
+            --add-data "app_simpleLoad;app_simpleLoad/" `
+            --add-data "my_websockets;my_websockets/" `
+            --collect-all numpy `
+            --collect-all rich `
+            --hidden-import numpy `
+            --hidden-import numpy._core `
+            --hidden-import numpy._core.multiarray `
+            --hidden-import numpy._core._multiarray_umath `
+            main.py
+
+      - name: Clean build artifacts
+        shell: pwsh
+        run: |
+          if (Test-Path "build") { Remove-Item -Recurse -Force "build" }
+          Get-ChildItem "*.spec" | Remove-Item -Force
+
+      # ─── py2pyd 代码加密 ───────────────────────────────────
+      - name: Encrypt Python files with py2pyd
+        run: |
+          uv run py2pyd -r -d --no-confirm "output/simple_load/_internal/app_simpleLoad"
+          uv run py2pyd -r -d --no-confirm "output/simple_load/_internal/my_websockets"
+
+      # ─── Inno Setup 打包 ───────────────────────────────────
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Build installer with Inno Setup
+        run: iscc inno_setup.iss
+
+      # ─── 上传到 Release ────────────────────────────────────
+      - name: Upload installer to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: software/simple_load-${{ env.APP_VERSION }}.exe
+          generate_release_notes: true

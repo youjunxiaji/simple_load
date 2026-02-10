@@ -74,7 +74,7 @@ simple_load/
 │   └── socket_routes.py             # WebSocket 路由
 │
 ├── static/                          # 静态资源
-│   └── 配置数据处理.ico              # 应用图标
+│   └── app_icon.ico                 # 应用图标
 │
 ├── build.bat                        # Windows 打包脚本（PyInstaller）
 └── inno_setup.iss                   # Inno Setup 安装包配置

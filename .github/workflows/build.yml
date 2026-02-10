@@ -49,7 +49,7 @@ jobs:
             --console `
             --distpath "output" `
             --name "simple_load" `
-            --icon "static/配置数据处理.ico" `
+            --icon "static/app_icon.ico" `
             --add-data "app_simpleLoad;app_simpleLoad/" `
             --add-data "my_websockets;my_websockets/" `
             --collect-all numpy `

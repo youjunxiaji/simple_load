@@ -2,11 +2,18 @@ name: Build & Release
 
 on:
   push:
+    branches:
+      - main   # 推送 main 时也构建，用于「预热」Nuitka 缓存（不打包、不发布）
     tags:
-      - "v*"  # 推送 v 开头的 tag 时触发（如 v1.2.1）
+      - "v*"   # 推送 v 开头的 tag 时构建并发布 Release（如 v1.2.1）
 
 permissions:
   contents: write  # 创建 Release 需要写权限
+
+# main 上被新提交取代的旧构建自动取消；tag（发布）构建永不取消
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
 
 jobs:
   build:
@@ -26,11 +33,15 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v4
 
-      # ─── 提取版本号 ────────────────────────────────────────
-      - name: Extract version from tag
+      # ─── 提取版本号（tag 取 tag 名；main 取 pyproject 版本）─
+      - name: Extract version
         shell: pwsh
         run: |
-          $version = "${{ github.ref_name }}" -replace '^v', ''
+          if ("${{ github.ref_type }}" -eq "tag") {
+            $version = "${{ github.ref_name }}" -replace '^v', ''
+          } else {
+            $version = (Select-String -Path pyproject.toml -Pattern '^version = "([^"]+)"').Matches[0].Groups[1].Value
+          }
           echo "APP_VERSION=$version" >> $env:GITHUB_ENV
           echo "Version: $version"
 
@@ -88,12 +99,15 @@ jobs:
           if (Test-Path "output/simple_load") { Remove-Item -Recurse -Force "output/simple_load" }
           Move-Item "output/main.dist" "output/simple_load"
 
-      # ─── Inno Setup 打包 ───────────────────────────────────
+      # ─── 以下打包/发布步骤仅在 tag 推送时执行（main 推送只预热缓存）─
+
       - name: Install Inno Setup
+        if: github.ref_type == 'tag'
         run: choco install innosetup -y --no-progress
 
       # 中文语言包随仓库自带（installer/ChineseSimplified.isl），不再依赖外部下载
       - name: Install Chinese language file for Inno Setup
+        if: github.ref_type == 'tag'
         shell: pwsh
         run: |
           $langDir = "${env:ProgramFiles(x86)}\Inno Setup 6\Languages"
@@ -101,10 +115,12 @@ jobs:
           Write-Host "Copied ChineseSimplified.isl to $langDir"
 
       - name: Build installer with Inno Setup
+        if: github.ref_type == 'tag'
         run: iscc inno_setup.iss
 
       # ─── 上传到 Release ────────────────────────────────────
       - name: Upload installer to Release
+        if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
           files: software/simple_load-${{ env.APP_VERSION }}.exe

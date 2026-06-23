@@ -1,0 +1,21 @@
+---
+description: GL Excel 导出排序与工况编号约定
+globs: app_simpleLoad/module/cal_simpleLoad.py
+alwaysApply: false
+---
+
+# GL Excel 导出约定
+
+## 关键文件路径
+
+- `app_simpleLoad/module/cal_simpleLoad.py`
+
+## 当前导出逻辑
+
+- `Load_Reduction_GL-...xlsx` 由 `CalSimpleLoad.simple_load2()` 生成。
+- 聚合后的 `df_pivot` 使用 `index_cols` 作为标签层级列。
+- 在生成 `工况` 列之前，`df_pivot` 按 `index_cols` 排序。
+- `工况` 使用排序后的行号生成，格式为 `loc001`、`loc002`、`loc003`。
+- 标签列转换为 `fx1`、`fy2`、`fz3` 等展示值之前，排序使用原始数字标签。
+- 导出 pandas DataFrame 时使用 `set_index(index_cols)` 形成 MultiIndex。
+- GL Excel 导出保持 `merge_cells=True`，让 MultiIndex 在 Excel 中合并连续相同的层级单元格。

@@ -401,6 +401,9 @@ class CalSimpleLoad:
         final_cols = ['time(h)', 'speed[rpm]'] + dynamic_load_cols + ['时间占比', '格子转速'] + index_cols
         df_pivot = df_pivot.select([col for col in final_cols if col in df_pivot.columns])
 
+        # 按分箱标签层级排序，让 Excel MultiIndex 合并块保持连续。
+        df_pivot = df_pivot.sort(index_cols)
+
         # 工况列和标签转换
         df_pivot = df_pivot.with_row_index('_row_idx')
         df_pivot = df_pivot.with_columns(
@@ -423,7 +426,10 @@ class CalSimpleLoad:
         df_pivot_pd = df_pivot_pd.set_index(index_cols)
 
         excel_name = os.path.basename(self.paths.result_folder_save_path)
-        df_pivot_pd.to_excel(f'{self.paths.result_folder_save_path}/Load_Reduction_GL-{excel_name}.xlsx')
+        df_pivot_pd.to_excel(
+            f'{self.paths.result_folder_save_path}/Load_Reduction_GL-{excel_name}.xlsx',
+            merge_cells=True,
+        )
 
         # Romax 格式输出
         df_pivot_Romax = pd.DataFrame()

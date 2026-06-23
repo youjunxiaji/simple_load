@@ -15,3 +15,7 @@
 *.ico binary
 *.exe binary
 *.xlsx binary
+
+# Inno Setup 语言文件：保持原始编码(UTF-8 BOM)与行尾，不做任何转换
+*.isl  binary
+*.islu binary

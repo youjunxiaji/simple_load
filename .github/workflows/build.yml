@@ -92,14 +92,13 @@ jobs:
       - name: Install Inno Setup
         run: choco install innosetup -y --no-progress
 
-      - name: Download Inno Setup Chinese language file
+      # 中文语言包随仓库自带（installer/ChineseSimplified.isl），不再依赖外部下载
+      - name: Install Chinese language file for Inno Setup
         shell: pwsh
         run: |
           $langDir = "${env:ProgramFiles(x86)}\Inno Setup 6\Languages"
-          Invoke-WebRequest `
-            -Uri "https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/Unofficial/ChineseSimplified.isl" `
-            -OutFile "$langDir\ChineseSimplified.isl"
-          Write-Host "Downloaded ChineseSimplified.isl to $langDir"
+          Copy-Item "installer\ChineseSimplified.isl" "$langDir\ChineseSimplified.isl" -Force
+          Write-Host "Copied ChineseSimplified.isl to $langDir"
 
       - name: Build installer with Inno Setup
         run: iscc inno_setup.iss

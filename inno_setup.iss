@@ -6,7 +6,7 @@
 #define MyAppPublisher "gulei"
 #define MyAppExeName "simple_load.exe"
 #define MyAppURL RemoveBackslash(SourcePath)
-#define MyAppProtocol "tmb-app"  ; ¶¨Òå×Ô¶¨ÒåĞ­ÒéÃû³Æ
+#define MyAppProtocol "tmb-app"  ; ï¿½ï¿½ï¿½ï¿½ï¿½Ô¶ï¿½ï¿½ï¿½Ğ­ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application. Do not use the same AppId value in installers for other applications.
@@ -18,7 +18,7 @@ AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\{#MyAppName}
 DisableProgramGroupPage=yes
-; °æ±¾ĞÅÏ¢
+; ï¿½æ±¾ï¿½ï¿½Ï¢
 VersionInfoVersion={#MyAppVersion}
 VersionInfoProductVersion={#MyAppVersion}
 VersionInfoCompany={#MyAppPublisher}
@@ -41,8 +41,8 @@ Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.i
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "{#MyAppURL}\output\{#MyAppName}\*"; DestDir: "{app}"
-Source: "{#MyAppURL}\output\{#MyAppName}\_internal\*"; DestDir: "{app}\_internal\"; Flags: recursesubdirs createallsubdirs
+; Nuitka standalone è¾“å‡ºä¸ºæ‰å¹³ç›®å½•ï¼ˆexe ä¸ä¾èµ– DLL/æ•°æ®åŒçº§ï¼‰ï¼Œé€’å½’å¤åˆ¶å³å¯
+Source: "{#MyAppURL}\output\{#MyAppName}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]
@@ -53,17 +53,17 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
 [Registry]
-; ×¢²á×Ô¶¨ÒåURLĞ­Òé
+; ×¢ï¿½ï¿½ï¿½Ô¶ï¿½ï¿½ï¿½URLĞ­ï¿½ï¿½
 Root: HKCR; Subkey: "{#MyAppProtocol}"; ValueType: string; ValueName: ""; ValueData: "URL:TMB Application Protocol"; Flags: uninsdeletekey
 Root: HKCR; Subkey: "{#MyAppProtocol}"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
 Root: HKCR; Subkey: "{#MyAppProtocol}\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"
 Root: HKCR; Subkey: "{#MyAppProtocol}\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""
 
-; Ìí¼ÓĞ¶ÔØÊ±ÇåÀí×¢²á±íÏî
+; ï¿½ï¿½ï¿½ï¿½Ğ¶ï¿½ï¿½Ê±ï¿½ï¿½ï¿½ï¿½×¢ï¿½ï¿½ï¿½ï¿½ï¿½
 [UninstallDelete]
 Type: files; Name: "{app}\*.*"
 Type: filesandordirs; Name: "{app}"
 
 [UninstallRun]
-; Ğ¶ÔØÊ±ÇåÀí×Ô¶¨ÒåURLĞ­Òé×¢²á±íÏî
+; Ğ¶ï¿½ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ï¿½Ô¶ï¿½ï¿½ï¿½URLĞ­ï¿½ï¿½×¢ï¿½ï¿½ï¿½ï¿½ï¿½
 Filename: "reg"; Parameters: "delete ""HKCR\{#MyAppProtocol}"" /f"; RunOnceId: "DelUrlProtocol"; Flags: runhidden

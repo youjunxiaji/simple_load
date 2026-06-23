@@ -1,20 +1,18 @@
 [project]
 name = "simple-load"
-version = "1.2.0"
+version = "1.2.1"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "cython>=3.2.4",
     "fastapi>=0.128.4",
-    "gl-py2pyd>=0.3.2",
+    "nuitka>=4.1.3",
     "numpy>=2.4.2",
     "openpyxl>=3.1.0",
     "pandas>=3.0.0",
     "polars>=1.38.1",
     "psutil>=7.2.2",
     "pyarrow>=23.0.0",
-    "pyinstaller>=6.18.0",
     "rich>=14.3.2",
     "uvicorn>=0.40.0",
     "websockets>=15.0",

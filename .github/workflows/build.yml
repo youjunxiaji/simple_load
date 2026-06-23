@@ -3,14 +3,14 @@ name: Build & Release
 on:
   push:
     tags:
-      - "v*"  # 推送 v 开头的 tag 时触发（如 v1.1.0）
+      - "v*"  # 推送 v 开头的 tag 时触发（如 v1.2.1）
 
 permissions:
   contents: write  # 创建 Release 需要写权限
 
 jobs:
   build:
-    name: Build Windows Installer
+    name: Build Windows Installer (Nuitka)
     runs-on: windows-latest
 
     steps:
@@ -36,46 +36,57 @@ jobs:
 
       # ─── 安装依赖 ──────────────────────────────────────────
       - name: Install dependencies
-        run: |
-          uv sync
-          uv add gl-py2pyd --dev
+        run: uv sync
 
-      # ─── PyInstaller 打包 ──────────────────────────────────
-      - name: Build with PyInstaller
-        run: |
-          uv run pyinstaller `
-            --noconfirm `
-            --onedir `
-            --console `
-            --distpath "output" `
-            --name "simple_load" `
-            --icon "static/app_icon.ico" `
-            --add-data "app_simpleLoad;app_simpleLoad/" `
-            --add-data "my_websockets;my_websockets/" `
-            --collect-all numpy `
-            --collect-all rich `
-            --hidden-import numpy `
-            --hidden-import numpy._core `
-            --hidden-import numpy._core.multiarray `
-            --hidden-import numpy._core._multiarray_umath `
-            main.py
-
-      - name: Clean build artifacts
-        shell: pwsh
-        run: |
-          if (Test-Path "build") { Remove-Item -Recurse -Force "build" }
-          Get-ChildItem "*.spec" | Remove-Item -Force
-
-      # ─── py2pyd 代码加密 ───────────────────────────────────
+      # ─── MSVC 环境（让 Nuitka 使用 cl，而非下载 MinGW）──────
       - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Encrypt Python files with py2pyd
-        env:
-          PYTHONUTF8: "1"
+      # ─── 缓存 Nuitka 编译产物，加速后续构建 ────────────────
+      - name: Cache Nuitka
+        uses: actions/cache@v4
+        with:
+          path: ~/AppData/Local/Nuitka/Nuitka
+          key: nuitka-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            nuitka-${{ runner.os }}-
+
+      # ─── Nuitka 编译（standalone 单目录）───────────────────
+      - name: Build with Nuitka
+        shell: pwsh
         run: |
-          uv run py2pyd -r -d --no-confirm "output/simple_load/_internal/app_simpleLoad"
-          uv run py2pyd -r -d --no-confirm "output/simple_load/_internal/my_websockets"
+          uv run python -m nuitka `
+            --standalone `
+            --output-dir="output" `
+            --output-filename="simple_load.exe" `
+            --windows-icon-from-ico="static/app_icon.ico" `
+            --company-name="gulei" `
+            --product-name="simple_load" `
+            --product-version=$env:APP_VERSION `
+            --file-version=$env:APP_VERSION `
+            --file-description="Load Calculator" `
+            --include-package=app_simpleLoad `
+            --include-package=my_websockets `
+            --include-package=fastapi `
+            --include-package=uvicorn `
+            --include-package=websockets `
+            --include-package=anyio `
+            --include-package=rich `
+            --include-package=numpy `
+            --include-package=pandas `
+            --include-package=polars `
+            --include-package=openpyxl `
+            --assume-yes-for-downloads `
+            --remove-output `
+            --progress-bar=none `
+            main.py
+
+      # ─── 重命名产物目录 main.dist -> simple_load ───────────
+      - name: Rename dist directory
+        shell: pwsh
+        run: |
+          if (Test-Path "output/simple_load") { Remove-Item -Recurse -Force "output/simple_load" }
+          Move-Item "output/main.dist" "output/simple_load"
 
       # ─── Inno Setup 打包 ───────────────────────────────────
       - name: Install Inno Setup

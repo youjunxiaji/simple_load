@@ -1,0 +1,17 @@
+# 默认：文本文件自动识别并在仓库内统一存为 LF
+* text=auto
+
+# Windows 专用脚本：检出为 CRLF
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+*.iss text eol=crlf
+
+# 跨平台 / Unix 风格：检出为 LF
+*.py  text eol=lf
+*.sh  text eol=lf
+*.yml text eol=lf
+
+# 二进制文件：不做换行符转换
+*.ico binary
+*.exe binary
+*.xlsx binary

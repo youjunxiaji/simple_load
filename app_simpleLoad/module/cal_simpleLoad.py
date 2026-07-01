@@ -65,6 +65,7 @@ class CalSimpleLoad:
 
         # 读取 Excel 频次表
         self.df_ref = read_freq_table(self.paths.freq_table_path, have_time)
+        expected_file_names = self.df_ref["文件名"].to_list()
 
         # 异步读取所有 TXT 文件（线程池并发，不阻塞事件循环）
         self.df_all, file_results = await read_all_txt_files(
@@ -72,6 +73,7 @@ class CalSimpleLoad:
             self.header,
             self.config,
             have_time,
+            expected_file_names=expected_file_names,
             progress=self.progress,
         )
         log_memory("预处理-文件读取完成", memory_start)

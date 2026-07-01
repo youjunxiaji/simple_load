@@ -8,8 +8,8 @@
 
 import os
 import asyncio
-import fnmatch
-from typing import List, Tuple
+from collections import Counter
+from typing import List, Tuple, Sequence
 from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
@@ -20,6 +20,72 @@ from app_simpleLoad.core.progress import ProgressReporter
 
 # 模块级线程池（复用，避免反复创建销毁）
 _thread_pool = ThreadPoolExecutor(max_workers=os.cpu_count() or 4)
+
+
+def normalize_load_file_name(value: object) -> str:
+    """Normalize Excel/txt file identifiers for matching."""
+    text = str(value).strip()
+    stem, ext = os.path.splitext(text)
+    if ext.lower() == ".txt":
+        return stem.strip()
+    return text
+
+
+def _format_file_names(names: Sequence[str], limit: int = 10) -> str:
+    sorted_names = sorted(names)
+    shown = "、".join(sorted_names[:limit])
+    remaining = len(sorted_names) - limit
+    if remaining > 0:
+        return f"{shown} 等 {len(sorted_names)} 个"
+    return shown
+
+
+def _duplicate_names(names: Sequence[str]) -> List[str]:
+    counts = Counter(names)
+    return sorted(name for name, count in counts.items() if count > 1)
+
+
+def _validate_txt_file_mapping(
+    expected_names: Sequence[str],
+    actual_names: Sequence[str],
+) -> None:
+    """Validate that Excel frequency rows match actual txt files one-to-one."""
+    duplicated_expected = _duplicate_names(expected_names)
+    if duplicated_expected:
+        raise ValueError(
+            "频次表第一列存在重复文件名："
+            f"{_format_file_names(duplicated_expected)}"
+        )
+
+    duplicated_actual = _duplicate_names(actual_names)
+    if duplicated_actual:
+        raise ValueError(
+            "载荷文件夹中存在重复 txt 文件名（忽略目录和扩展名后）："
+            f"{_format_file_names(duplicated_actual)}"
+        )
+
+    expected_set = set(expected_names)
+    actual_set = set(actual_names)
+    missing_names = sorted(expected_set - actual_set)
+    extra_names = sorted(actual_set - expected_set)
+
+    if not missing_names and not extra_names:
+        return
+
+    message_parts = [
+        f"频次表包含 {len(expected_names)} 条记录，实际找到 {len(actual_names)} 个 txt 文件",
+    ]
+    if missing_names:
+        message_parts.append(
+            f"缺失 {len(missing_names)} 个 txt：{_format_file_names(missing_names)}"
+        )
+    if extra_names:
+        message_parts.append(
+            f"多余 {len(extra_names)} 个 txt：{_format_file_names(extra_names)}"
+        )
+    message_parts.append("请检查频次表第一列文件名与载荷文件夹中的 txt 文件名是否一致")
+
+    raise ValueError(f"频次表与载荷文件不匹配：{'；'.join(message_parts)}")
 
 
 def _parse_single_file(
@@ -79,7 +145,7 @@ def _parse_single_file(
         ]
     )
 
-    file_name_no_ext = os.path.basename(file_path)[:-4]
+    file_name_no_ext = normalize_load_file_name(os.path.basename(file_path))
     df = df.with_columns(pl.lit(file_name_no_ext).alias("文件名"))
 
     # 时间信息
@@ -98,6 +164,7 @@ async def read_all_txt_files(
     header: List[str],
     config: ConversionConfig,
     have_time: bool,
+    expected_file_names: Sequence[str] | None = None,
     progress: ProgressReporter | None = None,
 ) -> Tuple[pl.DataFrame, List[FileResult]]:
     """异步并发读取文件夹下所有 TXT 载荷文件。
@@ -109,10 +176,26 @@ async def read_all_txt_files(
     # 收集文件路径
     file_paths = []
     for root, _, files in os.walk(folder_path):
-        txt_files = fnmatch.filter(files, "*.txt")
+        txt_files = [f for f in files if f.lower().endswith(".txt")]
         file_paths.extend(os.path.join(root, f) for f in txt_files)
+    file_paths.sort()
 
     total = len(file_paths)
+
+    actual_file_names = [
+        normalize_load_file_name(os.path.basename(path))
+        for path in file_paths
+    ]
+    if expected_file_names is not None:
+        normalized_expected_names = [
+            normalize_load_file_name(name)
+            for name in expected_file_names
+        ]
+        _validate_txt_file_mapping(normalized_expected_names, actual_file_names)
+
+    if total == 0:
+        raise ValueError(f"载荷文件夹中没有找到 txt 文件：{folder_path}")
+
     if progress:
         await progress.send_text(f"开始处理 {total} 个文件...")
         await progress.send_progress(0)
@@ -170,6 +253,30 @@ def read_freq_table(freq_table_path: str, have_time: bool) -> pl.DataFrame:
             filename=os.path.basename(freq_table_path),
             reason=str(e),
         ) from e
+
+    freq_file_name = os.path.basename(freq_table_path)
+    raw_file_names = df_ref_pd["文件名"]
+    if raw_file_names.isna().any():
+        raise FileParseError(
+            filename=freq_file_name,
+            reason="频次表第一列存在空文件名",
+        )
+
+    normalized_file_names = raw_file_names.map(normalize_load_file_name)
+    if (normalized_file_names == "").any():
+        raise FileParseError(
+            filename=freq_file_name,
+            reason="频次表第一列存在空文件名",
+        )
+
+    duplicated_ref_names = _duplicate_names(normalized_file_names.tolist())
+    if duplicated_ref_names:
+        raise FileParseError(
+            filename=freq_file_name,
+            reason=f"频次表第一列存在重复文件名：{_format_file_names(duplicated_ref_names)}",
+        )
+
+    df_ref_pd["文件名"] = normalized_file_names
 
     df_ref = pl.from_pandas(df_ref_pd)
     del df_ref_pd

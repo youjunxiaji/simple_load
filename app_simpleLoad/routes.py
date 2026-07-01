@@ -68,6 +68,9 @@ async def load_file(request: Request, data_: Dict):
 
     try:
         await instance.simple_Pre_processing()
+    except ValueError as e:
+        logger.error(str(e))
+        return {"message": str(e), "status": "error"}
     except FileParseError as e:
         logger.error(str(e))
         return {"message": str(e), "status": "error"}

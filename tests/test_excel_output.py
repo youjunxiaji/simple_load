@@ -113,14 +113,19 @@ class TestRomaxAxisMapping:
             expected = gl[source].to_numpy() * (-1.0 if negate else 1.0)
             assert matrix.loc[column].to_numpy(dtype=float) == pytest.approx(expected, rel=1e-9), column
 
-    async def test_原始列缺失时补零(self, divided, dataset, romax_origin):
-        """只给两行区间 → 结果里没有 Fz/Mx/My，Romax 对应列填 0。"""
-        await divided.simple_load2(table_data(*DEFAULT_BINS[:2]), romax_origin)
+    async def test_原始列缺失时补零(self, divided, dataset):
+        """Romax x ← 原始 y，而原始 My 恰好是被排除的分量 → 该列只能填 0。"""
+        mapping = factories.axis_mappings([
+            {"romax": "x", "origin": "y"},
+            {"romax": "y", "origin": "-z"},
+            {"romax": "z", "origin": "y"},
+        ])
+
+        await divided.simple_load2(table_data(*DEFAULT_BINS), mapping)
 
         matrix = romax_load_matrix(read_romax(dataset.romax_excel()))
-
         assert (matrix.loc["Mx[KNm]"].to_numpy(dtype=float) == 0).all()
-        assert (matrix.loc["My[KNm]"].to_numpy(dtype=float) == 0).all()
+        assert (matrix.loc["My[KNm]"].to_numpy(dtype=float) != 0).any()   # 这一列有源
 
     async def test_恒等映射时不反号(self, divided, dataset):
         identity = factories.axis_mappings([

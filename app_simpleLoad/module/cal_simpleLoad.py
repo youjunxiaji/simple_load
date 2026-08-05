@@ -248,19 +248,30 @@ class CalSimpleLoad:
             ('mz', 'Mz[KNm]', 'z')
         ]
 
-        # 排除 z 对应轴的力矩分量
+        # 排除 z 对应轴的力矩分量；开关打开时六个分量一视同仁
+        keep_torque = self.paths.keep_torque_component
         selected_components = []
         for comp_name, col_name, axis in all_components:
-            if comp_name.startswith('m') and axis == z_corresponds_to:
+            if not keep_torque and comp_name.startswith('m') and axis == z_corresponds_to:
                 continue
             selected_components.append((comp_name, col_name, axis))
+
+        # 区间行与分量按位置一一对应，行数对不上会导致标签错位、甚至静默丢分量
+        if len(lists) != len(selected_components):
+            expected = "/".join(comp_name for comp_name, _, _ in selected_components)
+            return {
+                "message": (
+                    f"区间行数与分量数不匹配：需要 {len(selected_components)} 行"
+                    f"（{expected}），实际收到 {len(lists)} 行"
+                ),
+                "status": "error",
+            }
 
         # 构建标签映射
         label_mappings = []
         for i, (comp_name, col_name, axis) in enumerate(selected_components):
-            if i < len(lists):
-                label_name = f"{comp_name}_label"
-                label_mappings.append((label_name, col_name, lists[i]))
+            label_name = f"{comp_name}_label"
+            label_mappings.append((label_name, col_name, lists[i]))
 
         self._label_prefixes = {}
 
@@ -440,7 +451,11 @@ class CalSimpleLoad:
         df_pivot_Romax['温度(C)'] = self.config.temperature
         df_pivot_Romax['speed[rpm]'] = df_pivot_pd['speed[rpm]'].values
 
+        # 保留绕转轴力矩时，Romax 载荷表多一行 Mz[KNm]（即 Romax z 轴上的力矩）
         cols_ = ['Fx[KN]', 'Fy[KN]', 'Fz[KN]', 'Mx[KNm]', 'My[KNm]']
+        if self.paths.keep_torque_component:
+            cols_.append('Mz[KNm]')
+
         for col in cols_:
             mapping = [m for m in romax_origin if m.romax == col[1]][0]
             source_col = col.replace(col[1], mapping.axis)

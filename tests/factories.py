@@ -116,7 +116,7 @@ class Dataset:
     def txt_path(self, name: str) -> Path:
         return self.load_dir / f"{self.case(name).name}.txt"
 
-    def path_config(self):
+    def path_config(self, *, keep_torque_component: bool = False):
         """转成 PathConfig（延迟 import，避免 factories 依赖业务模块）。"""
         from app_simpleLoad.core.config import PathConfig
 
@@ -124,6 +124,7 @@ class Dataset:
             result_folder_save_path=str(self.out_dir),
             load_file_folder_path=str(self.load_dir),
             freq_table_path=str(self.freq_path),
+            keep_torque_component=keep_torque_component,
         )
 
     @property

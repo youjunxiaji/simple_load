@@ -100,10 +100,19 @@ dataclass 实例**，所以 `cal_simpleLoad` 完全不依赖 Pydantic。
 
 前端传 `romax_origin`（`[{"romax":"x","origin":"x"}, ...]`）描述 Romax 轴 ← 原始轴的对应关系：
 
-- `romax_origin[2]['origin']` 指定 Romax z 对应的原始轴，**该轴上的力矩分量被排除**
+- `romax_origin[2].origin` 指定 Romax z 对应的原始轴，**该轴上的力矩分量（绕转轴的扭矩）默认被排除**
   （例：z←y 时排除 `My[KNm]`，结果表里就没有 `my_label`）；
+  `PathConfig.keep_torque_component=True` 可以要求保留，此时六个分量一视同仁；
 - 导出 Romax 文件时按映射取列，`origin` 带负号则整列取反；
-- 结果表里没有的源列，Romax 对应列填 0。
+- 结果表里没有的源列，Romax 对应列填 0；
+- Romax 载荷表默认五行（Romax 侧的 Fx/Fy/Fz/Mx/My）；打开保留开关后追加第六行 `Mz[KNm]`，
+  即绕 Romax z 轴的力矩 —— **载荷表行数会随开关变化**，下游读这个文件的工具要能接受。
+
+### 区间行与分量按位置对齐
+
+`tableData` 的第 i 行对应参与分组的第 i 个分量，顺序是 `fx/fy/fz/mx/my/mz` 去掉被排除的那个。
+行数必须与分量数**严格相等**，否则 `simple_load2` 直接返回错误 —— 少一行会静默丢掉最后一个分量，
+多一行会让区间错位到别的分量上。打开保留开关后前端必须给满 6 行。
 
 ### 进度推送协议
 

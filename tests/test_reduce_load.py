@@ -62,14 +62,14 @@ class TestComponentSelection:
         assert excluded not in columns
         assert [c for c in columns if str(c).endswith("_label")] == kept
 
-    async def test_标签列数受_tableData_行数限制(self, divided, dataset, romax_origin):
-        """前端只配了两行区间时，只有前两个分量参与分组。"""
-        await divided.simple_load2(table_data(BINARY_BINS, BINARY_BINS), romax_origin)
+    async def test_区间行数与分量数不一致时报错(self, divided, dataset, romax_origin):
+        """行与分量是按位置对齐的，行数不对会错位，所以直接拒绝。"""
+        result = await divided.simple_load2(table_data(BINARY_BINS, BINARY_BINS), romax_origin)
 
-        frame = read_gl(dataset.gl_excel())
-
-        assert [c for c in frame.columns if str(c).endswith("_label")] == ["fx_label", "fy_label"]
-        assert "Fz[KN]" not in frame.columns          # 未打标签的分量不出现在结果里
+        assert result["status"] == "error"
+        assert "需要 5 行（fx/fy/fz/mx/mz）" in result["message"]
+        assert "实际收到 2 行" in result["message"]
+        assert not dataset.gl_excel().exists()
 
     async def test_区间里的空字符串被忽略(self, divided, dataset, romax_origin):
         rows = [{"0": "-100", "1": "0", "2": "100", "3": ""} for _ in SELECTED_COLUMNS]
@@ -78,6 +78,92 @@ class TestComponentSelection:
 
         frame = read_gl(dataset.gl_excel())
         assert frame["fx_label"].isin(["fx1", "fx2", "fx3"]).all()
+
+
+# ─── 保留绕转轴力矩分量的开关 ────────────────────────────────
+
+#: 开关打开后参与打标签的六个分量，顺序即 tableData 的行顺序
+ALL_COMPONENT_COLUMNS = ["Fx[KN]", "Fy[KN]", "Fz[KN]", "Mx[KNm]", "My[KNm]", "Mz[KNm]"]
+SIX_ROW_BINS = [FX_BINS] + [BINARY_BINS] * 5
+
+
+class TestKeepTorqueComponent:
+    """PathConfig.keep_torque_component=True → 六个分量一视同仁。"""
+
+    @pytest.fixture
+    async def divided_keep(self, dataset, config, romax_origin):
+        instance = CalSimpleLoad()
+        instance.setInit(
+            paths=dataset.path_config(keep_torque_component=True),
+            header=dataset.header,
+            config=config,
+        )
+        await instance.simple_Pre_processing()
+        await instance.simple_load1(romax_origin)
+        return instance
+
+    async def test_六个分量都参与分组(self, divided_keep, dataset, romax_origin):
+        await divided_keep.simple_load2(table_data(*SIX_ROW_BINS), romax_origin)
+
+        frame = read_gl(dataset.gl_excel())
+
+        assert [c for c in frame.columns if str(c).endswith("_label")] == [
+            "fx_label", "fy_label", "fz_label", "mx_label", "my_label", "mz_label",
+        ]
+        assert "My[KNm]" in frame.columns          # 原本被丢掉的分量现在有输出列
+
+    async def test_区间必须给满六行(self, divided_keep, romax_origin):
+        result = await divided_keep.simple_load2(table_data(*DEFAULT_BINS), romax_origin)
+
+        assert result["status"] == "error"
+        assert "需要 6 行（fx/fy/fz/mx/my/mz）" in result["message"]
+        assert "实际收到 5 行" in result["message"]
+
+    async def test_算法与其余分量完全一致(self, divided_keep, dataset, config, romax_origin):
+        """和参考实现对拍：多出来的分量走的是同一套幂等效流程。"""
+        count = await divided_keep.simple_load2(table_data(*SIX_ROW_BINS), romax_origin)
+        expected = reference.reduce_loads(
+            reference.build_ref_cases(dataset, config),
+            list(zip(ALL_COMPONENT_COLUMNS, SIX_ROW_BINS)),
+            translate_factor=config.translate_factor,
+            tol=config.tol,
+        )
+
+        assert count == expected.count_before_tol
+        assert_frames_close(read_gl(dataset.gl_excel()), expected.frame)
+
+    async def test_Romax_载荷表多出_Mz_一行(self, divided_keep, dataset, romax_origin):
+        """保留的分量落在 Romax 的 z 轴力矩上，载荷表要给它一行。"""
+        from tests.excel_io import read_romax, romax_load_matrix
+
+        await divided_keep.simple_load2(table_data(*SIX_ROW_BINS), romax_origin)
+
+        frame = read_gl(dataset.gl_excel())
+        matrix = romax_load_matrix(read_romax(dataset.romax_excel()))
+
+        assert list(matrix.index) == [
+            "Fx[KN]", "Fy[KN]", "Fz[KN]", "Mx[KNm]", "My[KNm]", "Mz[KNm]",
+        ]
+        # romax z ← 原始 y，不带负号 → 直接取 GL 表里的 My
+        assert matrix.loc["Mz[KNm]"].to_numpy(dtype=float) == pytest.approx(
+            frame["My[KNm]"].to_numpy(), rel=1e-9
+        )
+
+    async def test_关闭时_Romax_仍是五行(self, divided, dataset, romax_origin):
+        from tests.excel_io import read_romax, romax_load_matrix
+
+        await divided.simple_load2(table_data(*DEFAULT_BINS), romax_origin)
+
+        matrix = romax_load_matrix(read_romax(dataset.romax_excel()))
+        assert list(matrix.index) == ["Fx[KN]", "Fy[KN]", "Fz[KN]", "Mx[KNm]", "My[KNm]"]
+
+    async def test_关闭时行为不变(self, divided, dataset, romax_origin):
+        """默认值必须保持现状：仍然排除、仍然是五行。"""
+        await divided.simple_load2(table_data(*DEFAULT_BINS), romax_origin)
+
+        frame = read_gl(dataset.gl_excel())
+        assert "my_label" not in frame.columns
+        assert "My[KNm]" not in frame.columns
 
 
 # ─── 区间标签化（3.1） ───────────────────────────────────────

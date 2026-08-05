@@ -2,12 +2,12 @@
 #Requires -Version 7.0
 $ErrorActionPreference = 'Stop'
 
-# 切到脚本所在目录（仓库根），保证相对路径与 git 命令正确
-Set-Location $PSScriptRoot
+# 切到仓库根（脚本在 packaging/ 下），保证相对路径与 git 命令正确
+Set-Location (Split-Path -Parent $PSScriptRoot)
 
 # ─── 版本号所在的文件（单一事实来源：pyproject.toml）──────────
 $Pyproject = 'pyproject.toml'
-$BuildBat  = 'build.bat'
+$BuildBat  = 'packaging/build.bat'
 $MainPy    = 'main.py'
 $Readme    = 'README.md'
 

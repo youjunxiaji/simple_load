@@ -70,7 +70,7 @@ jobs:
             --standalone `
             --output-dir="output" `
             --output-filename="simple_load.exe" `
-            --windows-icon-from-ico="static/app_icon.ico" `
+            --windows-icon-from-ico="packaging/static/app_icon.ico" `
             --company-name="gulei" `
             --product-name="simple_load" `
             --product-version=$env:APP_VERSION `
@@ -105,18 +105,19 @@ jobs:
         if: github.ref_type == 'tag'
         run: choco install innosetup -y --no-progress
 
-      # 中文语言包随仓库自带（installer/ChineseSimplified.isl），不再依赖外部下载
+      # 中文语言包随仓库自带（packaging/installer/ChineseSimplified.isl），不再依赖外部下载
       - name: Install Chinese language file for Inno Setup
         if: github.ref_type == 'tag'
         shell: pwsh
         run: |
           $langDir = "${env:ProgramFiles(x86)}\Inno Setup 6\Languages"
-          Copy-Item "installer\ChineseSimplified.isl" "$langDir\ChineseSimplified.isl" -Force
+          Copy-Item "packaging\installer\ChineseSimplified.isl" "$langDir\ChineseSimplified.isl" -Force
           Write-Host "Copied ChineseSimplified.isl to $langDir"
 
+      # iss 里的相对路径以脚本所在目录（packaging/）为基准，产物仍落在仓库根的 software/
       - name: Build installer with Inno Setup
         if: github.ref_type == 'tag'
-        run: iscc inno_setup.iss
+        run: iscc packaging\inno_setup.iss
 
       # ─── 上传到 Release ────────────────────────────────────
       - name: Upload installer to Release

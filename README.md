@@ -54,8 +54,9 @@ Simple Load 是一套面向风电齿轮箱设计的载荷简化系统，核心�
 ```
 simple_load/
 ├── main.py                          # 应用入口，FastAPI 实例创建与启动
-├── pyproject.toml                   # 项目配置与依赖声明
+├── pyproject.toml                   # 项目配置、依赖声明与 pytest 配置
 ├── .python-version                  # Python 版本锁定 (3.11)
+├── CLAUDE.md                        # 项目约定（给 AI 助手与新同事看）
 │
 ├── app_simpleLoad/                  # 核心业务模块
 │   ├── routes.py                    # API 路由定义（3 个接口）
@@ -73,13 +74,25 @@ simple_load/
 │   ├── socket_manager.py            # 连接管理器（连接/断开/命令处理）
 │   └── socket_routes.py             # WebSocket 路由
 │
-├── static/                          # 静态资源
-│   └── app_icon.ico                 # 应用图标
+├── tests/                           # 测试（pytest，合成数据，约 4 秒跑完）
+│   ├── conftest.py                  # 公共 fixture
+│   ├── factories.py                 # 合成数据集构造器
+│   ├── reference.py                 # 按公式独立重写的参考实现（对拍用）
+│   └── test_*.py                    # 按模块/步骤分文件
 │
-├── build.bat                        # Windows 打包脚本（Nuitka 编译）
-├── inno_setup.iss                   # Inno Setup 安装包配置
-└── release.ps1                      # 一键发版脚本（改版本号→打 tag→推送触发 CI）
+├── docs/                            # 项目文档
+│   ├── PROBLEM.md                   # 已知问题与优化记录
+│   └── REFACTOR_PLAN.md             # 重构计划
+│
+└── packaging/                       # Windows 打包与发版
+    ├── build.bat                    # 打包脚本（Nuitka 编译 + Inno Setup）
+    ├── inno_setup.iss               # 安装包配置
+    ├── release.ps1                  # 一键发版脚本（改版本号→打 tag→推送触发 CI）
+    ├── static/app_icon.ico          # 应用图标
+    └── installer/                   # Inno Setup 中文语言包
 ```
+
+> 构建产物固定落在仓库根：`output/`（Nuitka 中间产物）、`software/`（安装包），均已在 `.gitignore` 中。
 
 ---
 
@@ -117,6 +130,17 @@ uv run python main.py
 ```bash
 uv run python main.py --debug
 ```
+
+### 运行测试
+
+```bash
+uv run pytest              # 全量，约 4 秒
+uv run pytest --cov        # 带覆盖率
+```
+
+测试数据由 `tests/factories.py` 在临时目录现场合成，不依赖本地 `测试案例/`。
+`tests/reference.py` 是按下文公式独立重写的参考实现，与生产代码对拍，
+用于在重构时守住数值结果。
 
 ---
 
@@ -448,8 +472,8 @@ ws://localhost:9000/ws/{client_id}
 项目使用 Nuitka 将 Python 编译为原生机器码，再通过 Inno Setup 生成安装包。
 
 ```powershell
-# 在 Windows 环境下执行
-.\build.bat
+# 在 Windows 环境下、于仓库根执行
+.\packaging\build.bat
 ```
 
 打包流程：
@@ -466,7 +490,7 @@ ws://localhost:9000/ws/{client_id}
 推送 `v*` tag 会触发 GitHub Actions 自动用 Nuitka 编译、打包并发布到 Release。推荐用发版脚本一键完成：
 
 ```powershell
-.\release.ps1   # ↑↓ 选 major/minor/patch → 自动改版本号、提交、打 tag、推送触发 CI
+.\packaging\release.ps1   # ↑↓ 选 major/minor/patch → 自动改版本号、提交、打 tag、推送触发 CI
 ```
 
 ---

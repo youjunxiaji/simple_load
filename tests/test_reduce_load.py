@@ -1,0 +1,284 @@
+"""cal_simpleLoad 步骤三 —— 载荷缩减（simple_load2）
+
+对应 README「步骤三：载荷缩减」：
+    3.1 区间标签化   3.2 等效时间与转速   3.3 幂等效变换
+    3.4 聚合与缩减   3.5 逆幂变换        3.6 等效时间
+
+数值断言统一用 approx：生产链路是 float32 计算，参考实现是 float64，
+两者本就有 ~1e-7 量级的相对差。
+"""
+
+import pytest
+
+from app_simpleLoad.module.cal_simpleLoad import CalSimpleLoad
+from tests import factories, reference
+from tests.excel_io import assert_frames_close, read_gl
+
+#: 默认 romax 映射（z←y）下参与打标签的分量，顺序即 table_data 的行顺序
+SELECTED_COLUMNS = ["Fx[KN]", "Fy[KN]", "Fz[KN]", "Mx[KNm]", "Mz[KNm]"]
+
+#: Fx 用三段区间把 c1 的四行拆成两组，其余分量只做正负二分
+FX_BINS = [-100.0, 0.0, 4.15, 100.0]
+BINARY_BINS = [-100.0, 0.0, 100.0]
+DEFAULT_BINS = [FX_BINS, BINARY_BINS, BINARY_BINS, BINARY_BINS, BINARY_BINS]
+
+
+def table_data(*bin_rows: list[float]) -> list[dict[str, str]]:
+    """构造前端 tableData：每行是「列序号 → 边界值字符串」。"""
+    return [{str(i): str(value) for i, value in enumerate(row)} for row in bin_rows]
+
+
+@pytest.fixture
+async def reduced(divided, dataset, romax_origin):
+    """跑完默认参数的缩减，返回 (实例, 数据集, 返回计数, GL 表)。"""
+    count = await divided.simple_load2(table_data(*DEFAULT_BINS), romax_origin)
+    return divided, dataset, count, read_gl(dataset.gl_excel())
+
+
+# ─── 分量选择 ────────────────────────────────────────────────
+
+class TestComponentSelection:
+    @pytest.mark.parametrize(
+        ("z_origin", "excluded", "kept"),
+        [
+            ("y", "my_label", ["fx_label", "fy_label", "fz_label", "mx_label", "mz_label"]),
+            ("-y", "my_label", ["fx_label", "fy_label", "fz_label", "mx_label", "mz_label"]),
+            ("z", "mz_label", ["fx_label", "fy_label", "fz_label", "mx_label", "my_label"]),
+            ("x", "mx_label", ["fx_label", "fy_label", "fz_label", "my_label", "mz_label"]),
+        ],
+    )
+    async def test_排除与_Romax_z_轴对应的力矩分量(
+        self, divided, dataset, z_origin, excluded, kept
+    ):
+        romax_origin = [
+            {"romax": "x", "origin": "x"},
+            {"romax": "y", "origin": "-z"},
+            {"romax": "z", "origin": z_origin},
+        ]
+
+        await divided.simple_load2(table_data(*DEFAULT_BINS), romax_origin)
+
+        columns = read_gl(dataset.gl_excel()).columns
+        assert excluded not in columns
+        assert [c for c in columns if str(c).endswith("_label")] == kept
+
+    async def test_标签列数受_tableData_行数限制(self, divided, dataset, romax_origin):
+        """前端只配了两行区间时，只有前两个分量参与分组。"""
+        await divided.simple_load2(table_data(BINARY_BINS, BINARY_BINS), romax_origin)
+
+        frame = read_gl(dataset.gl_excel())
+
+        assert [c for c in frame.columns if str(c).endswith("_label")] == ["fx_label", "fy_label"]
+        assert "Fz[KN]" not in frame.columns          # 未打标签的分量不出现在结果里
+
+    async def test_区间里的空字符串被忽略(self, divided, dataset, romax_origin):
+        rows = [{"0": "-100", "1": "0", "2": "100", "3": ""} for _ in SELECTED_COLUMNS]
+
+        await divided.simple_load2(rows, romax_origin)
+
+        frame = read_gl(dataset.gl_excel())
+        assert frame["fx_label"].isin(["fx1", "fx2", "fx3"]).all()
+
+
+# ─── 区间标签化（3.1） ───────────────────────────────────────
+
+class TestLabels:
+    async def test_标签由区间序号加一得到(self, reduced):
+        _, _, _, frame = reduced
+
+        # c1 的 Fx≈4.0~4.3 落在 (0, 4.15] 和 (4.15, 100] 两段 → fx2 / fx3
+        # c2 的 Fx≈-4.5~-4.8 落在 (-100, 0] → fx1
+        assert set(frame["fx_label"]) == {"fx1", "fx2", "fx3"}
+        assert set(frame["mz_label"]) == {"mz1", "mz2"}
+
+    async def test_超出区间的值被裁剪到端点(self, divided, dataset, romax_origin):
+        narrow = [[-1.0, 0.0, 1.0]] * 5           # 全部数据都在 ±1 之外
+
+        await divided.simple_load2(table_data(*narrow), romax_origin)
+
+        frame = read_gl(dataset.gl_excel())
+        assert set(frame["fx_label"]) == {"fx1", "fx3"}   # 下越界→第 1 段，上越界→最后一段
+
+    async def test_区间非单调时返回错误(self, divided, romax_origin):
+        bad = [[10.0, 0.0, 20.0]] + [BINARY_BINS] * 4
+
+        result = await divided.simple_load2(table_data(*bad), romax_origin)
+
+        assert result == {"message": "Fx[KN]的区间值必须是单调递增的", "status": "error"}
+
+    async def test_区间非单调时不写出文件(self, divided, dataset, romax_origin):
+        bad = [BINARY_BINS, [10.0, 0.0]] + [BINARY_BINS] * 3
+
+        await divided.simple_load2(table_data(*bad), romax_origin)
+
+        assert not dataset.gl_excel().exists()
+
+
+# ─── 数值正确性（3.2~3.6） ──────────────────────────────────
+
+class TestNumbers:
+    async def test_与参考实现逐格一致(self, reduced, config, romax_origin):
+        _, dataset, count, frame = reduced
+        expected = reference.reduce_loads(
+            reference.build_ref_cases(dataset, config),
+            list(zip(SELECTED_COLUMNS, DEFAULT_BINS)),
+            translate_factor=config.translate_factor,
+            tol=config.tol,
+        )
+
+        assert count == expected.count_before_tol
+        assert_frames_close(frame, expected.frame)
+
+    async def test_返回值是_tol_过滤前的分组数(self, reduced):
+        _, _, count, frame = reduced
+
+        assert count == len(frame)          # 默认 tol 极小，未过滤掉任何分组
+
+    async def test_时间占比之和为一(self, reduced):
+        _, _, _, frame = reduced
+
+        assert frame["时间占比"].sum() == pytest.approx(1.0, rel=1e-6)
+
+    async def test_等效时间等于占比乘以全寿命总时长(self, reduced, dataset):
+        _, _, _, frame = reduced
+        total_hours = dataset.total_weighted_time() / 3600.0
+
+        assert frame["time(h)"].tolist() == pytest.approx(
+            (frame["时间占比"] * total_hours).tolist(), rel=1e-5
+        )
+
+    async def test_等效时间总和等于全寿命小时数(self, reduced, dataset):
+        _, _, _, frame = reduced
+
+        assert frame["time(h)"].sum() == pytest.approx(
+            dataset.total_weighted_time() / 3600.0, rel=1e-5
+        )
+
+    async def test_转速为格子转速加权平均且恒为正(self, reduced, dataset, config):
+        _, _, _, frame = reduced
+
+        assert (frame["speed[rpm]"] > 0).all()
+        # 全部分组合起来的加权平均，应等于各工况转速按格子转速加权的总平均
+        cases = reference.build_ref_cases(dataset, config)
+        numerator = sum(
+            (abs(c.values["speed[rpm]"]) ** 2 * c.sample_interval * c.occurrences).sum()
+            for c in cases
+        )
+        denominator = sum(
+            (abs(c.values["speed[rpm]"]) * c.sample_interval * c.occurrences).sum()
+            for c in cases
+        )
+        overall = (frame["speed[rpm]"] * frame["格子转速"]).sum() / frame["格子转速"].sum()
+        assert overall == pytest.approx(numerator / denominator, rel=1e-5)
+
+    async def test_幂等效变换往返(self, divided, dataset, romax_origin, config):
+        """所有行归为一组时，结果就是 (Σ|F|^m·R / ΣR)^(1/m)。"""
+        one_group = [[-100.0, 100.0]] * 5
+
+        await divided.simple_load2(table_data(*one_group), romax_origin)
+
+        frame = read_gl(dataset.gl_excel())
+        assert len(frame) == 1
+
+        cases = reference.build_ref_cases(dataset, config)
+        m = config.translate_factor
+        weighted, weights = 0.0, 0.0
+        for case in cases:
+            grid_speed = abs(case.values["speed[rpm]"]) * case.sample_interval * case.occurrences
+            weighted += (reference.power_transform(case.values["Fx[KN]"], m) * grid_speed).sum()
+            weights += grid_speed.sum()
+        expected = reference.inverse_power_transform(
+            (weighted / weights).reshape(1), m
+        )[0]
+
+        assert frame["Fx[KN]"].iloc[0] == pytest.approx(expected, rel=1e-5)
+
+
+# ─── 过滤（3.4） ─────────────────────────────────────────────
+
+class TestTolFiltering:
+    async def test_占比低于_tol_的分组被剔除(self, divided, dataset, romax_origin):
+        divided.config.tol = 0.5              # 只保留占比 > 50% 的分组
+
+        count = await divided.simple_load2(table_data(*DEFAULT_BINS), romax_origin)
+
+        frame = read_gl(dataset.gl_excel())
+        assert count == 3                     # 返回值仍是过滤前的分组数
+        assert len(frame) == 1                # 实际导出只剩占比最大的一组
+        assert frame["时间占比"].iloc[0] > 0.5
+
+    async def test_tol_为零时全部保留(self, divided, dataset, romax_origin):
+        divided.config.tol = 0.0
+
+        count = await divided.simple_load2(table_data(*DEFAULT_BINS), romax_origin)
+
+        assert len(read_gl(dataset.gl_excel())) == count
+
+
+# ─── 排序与工况编号（导出约定） ──────────────────────────────
+
+class TestOrderingAndNaming:
+    async def test_工况号按标签排序后连续编号(self, reduced):
+        _, _, _, frame = reduced
+
+        assert frame["工况"].tolist() == [f"loc{i + 1:03d}" for i in range(len(frame))]
+
+    async def test_按标签层级升序排列(self, reduced):
+        _, _, _, frame = reduced
+        label_columns = [c for c in frame.columns if str(c).endswith("_label")]
+
+        ordered = frame[label_columns].values.tolist()
+        assert ordered == sorted(ordered)
+
+    async def test_工况号三位补零(self, divided, dataset, romax_origin):
+        await divided.simple_load2(table_data(*[[-100.0, 100.0]] * 5), romax_origin)
+
+        frame = read_gl(dataset.gl_excel())
+        assert frame["工况"].iloc[0] == "loc001"
+
+
+# ─── 错误分支 ────────────────────────────────────────────────
+
+class TestErrors:
+    async def test_未加载数据时返回错误提示(self, instance, romax_origin):
+        result = await instance.simple_load2(table_data(*DEFAULT_BINS), romax_origin)
+
+        assert result == {"message": "请先加载文件", "status": "error"}
+
+    async def test_romax_映射缺失时抛_IndexError(self, divided):
+        """routes 会兜住这个异常并返回「载荷缩减失败」。"""
+        with pytest.raises(IndexError):
+            await divided.simple_load2(table_data(*DEFAULT_BINS), [])
+
+    async def test_结果目录不存在时抛_OSError(self, divided, romax_origin, tmp_path):
+        divided.paths.result_folder_save_path = str(tmp_path / "不存在的目录")
+
+        with pytest.raises(OSError):
+            await divided.simple_load2(table_data(*DEFAULT_BINS), romax_origin)
+
+    async def test_连续两次缩减结果一致(self, divided, dataset, romax_origin):
+        """前端可能反复调整区间重算，重复调用不应互相污染。"""
+        first_count = await divided.simple_load2(table_data(*DEFAULT_BINS), romax_origin)
+        first = read_gl(dataset.gl_excel())
+
+        second_count = await divided.simple_load2(table_data(*DEFAULT_BINS), romax_origin)
+        second = read_gl(dataset.gl_excel())
+
+        assert first_count == second_count
+        assert_frames_close(first, second, rel=1e-9)
+
+
+# ─── 进度推送 ────────────────────────────────────────────────
+
+class TestProgress:
+    async def test_推送缩减各阶段进度(self, divided, romax_origin, connected_ws, instant_sleep):
+        from app_simpleLoad.core import progress as progress_module
+
+        instant_sleep(progress_module)
+
+        await divided.simple_load2(table_data(*DEFAULT_BINS), romax_origin)
+
+        assert "开始载荷缩减处理..." in connected_ws.texts
+        assert "正在保存Excel文件..." in connected_ws.texts
+        assert connected_ws.texts[-1] == "载荷缩减处理全部完成！"
+        assert connected_ws.progresses[-1] == pytest.approx(100.0)

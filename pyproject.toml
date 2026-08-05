@@ -17,3 +17,30 @@ dependencies = [
     "uvicorn>=0.40.0",
     "websockets>=15.0",
 ]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
+]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+pythonpath = ["."]                      # 让 tests 能直接 import app_simpleLoad / my_websockets / main
+asyncio_mode = "auto"                   # async def 测试无需逐个加 @pytest.mark.asyncio
+asyncio_default_fixture_loop_scope = "function"
+addopts = "-q --strict-markers --strict-config"
+
+[tool.coverage.run]
+source = ["app_simpleLoad", "my_websockets", "main"]
+omit = ["*/__pycache__/*"]
+
+[tool.coverage.report]
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+]

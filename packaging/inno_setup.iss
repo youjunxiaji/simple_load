@@ -27,7 +27,7 @@ VersionInfoTextVersion={#MyAppVersion}
 VersionInfoCopyright=Copyright (C) {#MyAppPublisher}
 ; Uncomment the following line to run in non administrative install mode (install for current user only.)
 ;PrivilegesRequired=lowest
-OutputDir={#MyAppURL}\software
+OutputDir={#MyAppURL}\..\software
 OutputBaseFilename={#MyAppName}-{#MyAppVersion}
 SetupIconFile={#MyAppURL}\static\app_icon.ico
 Compression=lzma
@@ -42,7 +42,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 ; Nuitka standalone 输出为扁平目录（exe 与依赖 DLL/数据同级），递归复制即可
-Source: "{#MyAppURL}\output\{#MyAppName}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs
+Source: "{#MyAppURL}\..\output\{#MyAppName}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]

@@ -7,8 +7,12 @@ REM 设置版本号环境变量
 set "APP_VERSION=1.2.3"
 echo 当前版本号: %APP_VERSION%
 
-REM 获取当前批处理文件所在的目录
-set "current_dir=%~dp0"
+REM 脚本自身所在目录（packaging\）与项目根目录
+set "script_dir=%~dp0"
+for %%I in ("%~dp0..") do set "current_dir=%%~fI\"
+
+REM 切到项目根，保证 uv / Nuitka 能找到 pyproject.toml 与业务包
+cd /d "%current_dir%"
 
 REM 创建输出目录（如果不存在）
 if not exist "%current_dir%output" mkdir "%current_dir%output"
@@ -26,7 +30,7 @@ uv run python -m nuitka ^
     --standalone ^
     --output-dir="%current_dir%output" ^
     --output-filename="simple_load.exe" ^
-    --windows-icon-from-ico="%current_dir%static\app_icon.ico" ^
+    --windows-icon-from-ico="%script_dir%static\app_icon.ico" ^
     --company-name="gulei" ^
     --product-name="simple_load" ^
     --product-version=%APP_VERSION% ^
@@ -65,7 +69,7 @@ if %errorlevel% neq 0 (
 )
 
 REM 打包成安装文件
-"D:\Inno Setup 6\ISCC.exe" "%current_dir%inno_setup.iss"
+"D:\Inno Setup 6\ISCC.exe" "%script_dir%inno_setup.iss"
 
 if %errorlevel% neq 0 (
     echo Inno Setup 打包失败，退出脚本

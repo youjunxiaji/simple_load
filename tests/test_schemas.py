@@ -43,6 +43,15 @@ class TestLoadFileRequest:
         assert isinstance(request.conversion_factors, ConversionConfig)
         assert request.file_path.freq_table_path == "freq.xlsx"
 
+    def test_保留扭矩分量开关默认关闭(self):
+        """前端不传这个字段时，行为与现在完全一致。"""
+        assert LoadFileRequest.model_validate(load_body()).file_path.keep_torque_component is False
+
+    def test_保留扭矩分量开关可由报文打开(self):
+        body = load_body(file_path=dict(PATHS, keep_torque_component=True))
+
+        assert LoadFileRequest.model_validate(body).file_path.keep_torque_component is True
+
     def test_header_按列顺序展开(self):
         request = LoadFileRequest.model_validate(load_body())
 

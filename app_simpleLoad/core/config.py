@@ -24,6 +24,11 @@ class PathConfig:
     load_file_folder_path: str     # 时序载荷文件夹
     freq_table_path: str           # 频次表路径
 
+    # 是否保留「与 Romax z 轴对应的原始轴」上的力矩分量（即绕转轴的扭矩）。
+    # False（默认）= 维持现状把它排除；True = 六个分量一视同仁参与分组与输出。
+    # 注意：置 True 时 tableData 需要给满 6 行区间，行序为 fx/fy/fz/mx/my/mz。
+    keep_torque_component: bool = False
+
 
 @dataclass
 class ConversionConfig:

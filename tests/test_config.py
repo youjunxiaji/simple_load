@@ -40,6 +40,13 @@ class TestPathConfig:
         assert PathConfig("a", "b", "c") == PathConfig("a", "b", "c")
         assert dataclasses.is_dataclass(PathConfig)
 
+    def test_默认不保留绕转轴力矩分量(self):
+        """默认值必须维持现状：那个分量继续被排除。"""
+        assert PathConfig("a", "b", "c").keep_torque_component is False
+
+    def test_可显式要求保留(self):
+        assert PathConfig("a", "b", "c", keep_torque_component=True).keep_torque_component is True
+
 
 class TestConversionConfig:
     def test_默认值与前端约定一致(self):

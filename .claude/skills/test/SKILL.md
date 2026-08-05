@@ -30,7 +30,8 @@ uv run pytest -x --tb=long             # 首次失败即停、打全栈
 | `reference.py` | **参考实现**：按 README 公式独立重写的算法 |
 | `excel_io.py` | 读回导出的 Excel、逐列近似比较 |
 | `fakes.py` | FakeWebSocket / StubCalSimpleLoad / InstantSleepAsyncio |
-| `test_config.py` | 配置数据类与 FileParseError |
+| `test_config.py` | 配置数据类（含 AxisMapping）与 FileParseError |
+| `test_schemas.py` | 请求体模型：字段契约、缺省值、校验失败 |
 | `test_file_reader.py` | 文件名归一化、频次表校验、单文件解析、并发读取 |
 | `test_preprocessing.py` | 步骤一：setInit 校验、工况占比、采样间隔 |
 | `test_divide_interval.py` | 步骤二：区间划分、加权直方图 |
@@ -64,8 +65,10 @@ uv run pytest -x --tb=long             # 首次失败即停、打全栈
 
 **改了导出格式** → `test_excel_output.py`。列顺序、sheet 名、坐标轴正负号都是下游 Romax 的硬约定。
 
-**改了接口** → `test_routes.py` 用 `StubCalSimpleLoad` 覆盖分支；只有 `TestFullFlowThroughApi`
-跑真实计算。
+**改了接口** → 报文字段先改 `app_simpleLoad/schemas.py` 并在 `test_schemas.py` 补用例；
+路由分支用 `StubCalSimpleLoad` 覆盖（`test_routes.py`），只有 `TestFullFlowThroughApi` 跑真实计算。
+注意计算层收的是 `AxisMapping` dataclass，发 HTTP 请求时才用报文形态
+（`factories.ROMAX_ORIGIN` 是字典，`factories.axis_mappings()` 是 dataclass）。
 
 ## 坑（踩过的）
 

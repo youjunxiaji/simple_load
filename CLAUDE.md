@@ -32,7 +32,8 @@ uv run pytest                  # 全量测试，约 4 秒
 | 文件 | 职责 | 动它之前先知道 |
 |------|------|--------------|
 | `main.py` | FastAPI 实例、CORS、启动横幅 | 版本号在 `show_startup_banner` 里写死了一份，改版本要同步 `pyproject.toml` |
-| `app_simpleLoad/routes.py` | 三个接口：加载 / 划分区间 / 缩减 | 没有 Pydantic 校验，请求体是裸 `Dict` |
+| `app_simpleLoad/routes.py` | 三个接口：加载 / 划分区间 / 缩减 | 只做「取实例 → 调方法 → 兜异常」，不解析报文 |
+| `app_simpleLoad/schemas.py` | 请求体的 Pydantic 模型 | 字段名是对外契约，改名等于改前端 |
 | `app_simpleLoad/module/cal_simpleLoad.py` | 三个步骤的实现，全部状态在这个实例上 | 最大的一个文件，重构主战场 |
 | `app_simpleLoad/services/file_reader.py` | 异步读 txt（线程池）、读频次表、一致性校验 | 面向用户的错误文案都在这里 |
 | `app_simpleLoad/core/` | 配置数据类 / 进度推送 / 日志 / 内存监控 | `memory` 默认关闭，`--debug` 才打开 |
@@ -49,11 +50,24 @@ uv run pytest                  # 全量测试，约 4 秒
 所以三个接口都要先判 `instance is None`；`/api/load_file` 在实例为空且连接断开时，
 会等待前端重连最多 10 秒（20 × 0.5s）再放弃。改这块要同步改 `tests/test_routes.py`。
 
+### 边界用 Pydantic，内部只见 dataclass
+
+`schemas.py` 里的模型只描述**报文**（`file_path` / `draggableElements` / `conversion_factors` /
+`tableData` / `romax_origin`，字段名不能改）；嵌套结构直接标注成 `core/config.py` 里的
+dataclass（`PathConfig` / `ConversionConfig` / `AxisMapping`），Pydantic 会校验并构造出**真正的
+dataclass 实例**，所以 `cal_simpleLoad` 完全不依赖 Pydantic。
+
+新增一个入参时的落点：**报文层加字段 → 落到某个 dataclass → 计算层用属性访问**，
+不要在 routes 里手工拆字典。
+
 ### 业务错误不抛 HTTP 错误码
 
 所有可预期的失败都返回 `200` + `{"message": "...", "status": "error"}`，
 消息文本直接显示给用户，**属于对外契约**，改文案要一起改测试。
 区分：`FileParseError` = 文件本身有问题，`ValueError` = 配置/匹配不上。
+
+请求体校验失败（Pydantic）也被 `main.py` 的 `RequestValidationError` 处理器折成同一种形状，
+而不是 FastAPI 默认的 422 —— 前端只认 `status` 字段。想换回标准 422，删掉那个处理器即可。
 
 ### 频次表按「列序」识别，不认列名
 

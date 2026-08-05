@@ -53,7 +53,7 @@ simple_load/
 
 | 模块 | 职责 | 从原代码提取的功能 |
 |------|------|------------------|
-| `schemas.py` | API 请求体/响应体类型定义 | routes.py 中的 Dict 类型替换为 Pydantic 模型 |
+| `schemas.py` ✅ | API 请求体类型定义 | routes.py 中的 Dict 类型替换为 Pydantic 模型（响应体仍是裸 dict） |
 | `config.py` | 配置数据类 | `setInit()` 中的参数 → `PathConfig` + `ConversionConfig` |
 | `progress.py` | 进度推送封装 | `_update_progress_smoothly()` + WebSocket 调用 |
 | `file_reader.py` | 异步文件读取 | `_process_single_file_sync()` + `simple_Pre_processing()` 的读取部分 |

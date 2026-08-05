@@ -6,6 +6,7 @@
 
 import pytest
 
+from tests import factories
 from tests.excel_io import read_gl, read_romax, romax_load_matrix
 from tests.reference import romax_column_source
 from tests.test_reduce_load import DEFAULT_BINS, table_data
@@ -122,11 +123,11 @@ class TestRomaxAxisMapping:
         assert (matrix.loc["My[KNm]"].to_numpy(dtype=float) == 0).all()
 
     async def test_恒等映射时不反号(self, divided, dataset):
-        identity = [
+        identity = factories.axis_mappings([
             {"romax": "x", "origin": "x"},
             {"romax": "y", "origin": "y"},
             {"romax": "z", "origin": "z"},
-        ]
+        ])
 
         await divided.simple_load2(table_data(*DEFAULT_BINS), identity)
 

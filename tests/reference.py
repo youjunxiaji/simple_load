@@ -102,9 +102,9 @@ def weighted_histogram(
 
 # ─── 3. 载荷缩减 ─────────────────────────────────────────────
 
-def selected_components(romax_origin: Sequence[Mapping[str, str]]) -> list[tuple[str, str, str]]:
+def selected_components(romax_origin: Sequence) -> list[tuple[str, str, str]]:
     """排除「与 Romax z 轴对应的原始轴」上的力矩分量。"""
-    z_axis = romax_origin[2]["origin"].replace("-", "")
+    z_axis = romax_origin[2].axis
     return [
         comp for comp in ALL_COMPONENTS
         if not (comp[0].startswith("m") and comp[2] == z_axis)
@@ -268,12 +268,11 @@ def build_ref_cases(dataset, config) -> list[RefCase]:
     ]
 
 
-def romax_column_source(column: str, romax_origin: Sequence[Mapping[str, str]]) -> tuple[str, bool]:
+def romax_column_source(column: str, romax_origin: Sequence) -> tuple[str, bool]:
     """Romax 某列取自哪一原始列、是否需要反号。
 
     例：romax y ← 原始 -z，则 Romax 的 Fy[KN] = -Fz[KN]。
     """
     axis = column[1]
-    origin = [item["origin"] for item in romax_origin if item["romax"] == axis][0]
-    source = column.replace(axis, origin).replace("-", "")
-    return source, "-" in origin
+    mapping = [item for item in romax_origin if item.romax == axis][0]
+    return column.replace(axis, mapping.axis), mapping.inverted

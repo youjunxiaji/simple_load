@@ -13,7 +13,7 @@ import gc
 logger = get_logger(__name__)
 import pandas as pd  # 仅用于 Excel 输出和 IntervalIndex
 
-from app_simpleLoad.core.config import PathConfig, ConversionConfig
+from app_simpleLoad.core.config import AxisMapping, PathConfig, ConversionConfig
 from app_simpleLoad.core.memory import log_memory, MemoryMonitor
 from app_simpleLoad.core.progress import ProgressReporter
 from app_simpleLoad.services.file_reader import read_all_txt_files, read_freq_table
@@ -113,7 +113,7 @@ class CalSimpleLoad:
 
     # ─── 步骤二：划分区间 ─────────────────────────────────────
 
-    async def simple_load1(self, romax_origin):
+    async def simple_load1(self, romax_origin: List[AxisMapping]):
         """划分区间 — Polars 版本"""
         if self.df_all is None:
             logger.error("df_all is None")
@@ -218,7 +218,7 @@ class CalSimpleLoad:
 
     # ─── 步骤三：载荷缩减 ─────────────────────────────────────
 
-    async def simple_load2(self, table_data, romax_origin: Dict):
+    async def simple_load2(self, table_data: List[Dict], romax_origin: List[AxisMapping]):
         """载荷缩减 — Polars 版本"""
         if self.df_all is None or self.df_ref is None:
             return {"message": "请先加载文件", "status": "error"}
@@ -237,7 +237,7 @@ class CalSimpleLoad:
         ]
 
         # 根据 romax_origin 确定要排除的轴
-        z_corresponds_to = romax_origin[2]['origin'].replace("-", "")
+        z_corresponds_to = romax_origin[2].axis
 
         all_components = [
             ('fx', 'Fx[KN]', 'x'),
@@ -442,10 +442,10 @@ class CalSimpleLoad:
 
         cols_ = ['Fx[KN]', 'Fy[KN]', 'Fz[KN]', 'Mx[KNm]', 'My[KNm]']
         for col in cols_:
-            condition_ = [x['origin'] for x in romax_origin if x['romax'] == col[1]][0]
-            source_col = col.replace(col[1], condition_).replace("-", "")
+            mapping = [m for m in romax_origin if m.romax == col[1]][0]
+            source_col = col.replace(col[1], mapping.axis)
             if source_col in df_pivot_pd.columns:
-                if "-" in condition_:
+                if mapping.inverted:
                     df_pivot_Romax[col] = -1.0 * df_pivot_pd[source_col].to_numpy()
                 else:
                     df_pivot_Romax[col] = df_pivot_pd[source_col].to_numpy()

@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from app_simpleLoad.core import memory as memory_module
-from app_simpleLoad.core.config import ConversionConfig
+from app_simpleLoad.core.config import AxisMapping, ConversionConfig
 from app_simpleLoad.module.cal_simpleLoad import CalSimpleLoad
 from my_websockets.global_ws import GlobalWebSocket, ws
 from tests import factories
@@ -83,9 +83,13 @@ def config() -> ConversionConfig:
 
 
 @pytest.fixture
-def romax_origin() -> list[dict[str, str]]:
-    """Romax 坐标映射：x←x, y←-z, z←y（即排除原始 y 轴力矩 My）。"""
-    return [dict(item) for item in factories.ROMAX_ORIGIN]
+def romax_origin() -> list[AxisMapping]:
+    """Romax 坐标映射：x←x, y←-z, z←y（即排除原始 y 轴力矩 My）。
+
+    计算层收的是 `AxisMapping` dataclass；发 HTTP 请求时用报文形态
+    `factories.ROMAX_ORIGIN`。
+    """
+    return factories.axis_mappings()
 
 
 # ─── 合成数据集 ──────────────────────────────────────────────

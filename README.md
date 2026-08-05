@@ -340,7 +340,9 @@ $$t_g = p_g \times \frac{\sum_{j=1}^{K} T_j \times N_j}{3600}$$
 
 ## API 接口
 
-所有接口均以 `/api` 为前缀，使用 `POST` 方法。
+所有接口均以 `/api` 为前缀，使用 `POST` 方法。请求体由 `app_simpleLoad/schemas.py` 中的
+Pydantic 模型校验；校验失败与业务失败一样返回 `200` + `{"message": ..., "status": "error"}`。
+完整字段说明见 `http://localhost:9000/docs`。
 
 ### POST `/api/load_file`
 

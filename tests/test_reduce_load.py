@@ -50,11 +50,11 @@ class TestComponentSelection:
     async def test_排除与_Romax_z_轴对应的力矩分量(
         self, divided, dataset, z_origin, excluded, kept
     ):
-        romax_origin = [
+        romax_origin = factories.axis_mappings([
             {"romax": "x", "origin": "x"},
             {"romax": "y", "origin": "-z"},
             {"romax": "z", "origin": z_origin},
-        ]
+        ])
 
         await divided.simple_load2(table_data(*DEFAULT_BINS), romax_origin)
 

@@ -1,12 +1,15 @@
-import json
 import asyncio
 from fastapi import APIRouter, Request
 from app_simpleLoad.core.logger import get_logger
-from typing import Dict
 
 logger = get_logger(__name__)
 
-from app_simpleLoad.core.config import PathConfig, ConversionConfig, FileParseError
+from app_simpleLoad.core.config import FileParseError
+from app_simpleLoad.schemas import (
+    DivideIntervalRequest,
+    LoadFileRequest,
+    ReduceLoadRequest,
+)
 from app_simpleLoad.module.cal_simpleLoad import CalSimpleLoad
 from my_websockets.global_ws import ws
 
@@ -14,7 +17,7 @@ router = APIRouter()
 
 
 @router.post("/load_file")
-async def load_file(request: Request, data_: Dict):
+async def load_file(request: Request, data_: LoadFileRequest):
     """
     说明
     ---
@@ -48,17 +51,10 @@ async def load_file(request: Request, data_: Dict):
         logger.info("创建新的 CalSimpleLoad 实例，WebSocket连接正常")
     
     try:
-        paths = PathConfig(
-            result_folder_save_path=data_['file_path']['result_folder_save_path'],
-            load_file_folder_path=data_['file_path']['load_file_folder_path'],
-            freq_table_path=data_['file_path']['freq_table_path'],
-        )
-        config = ConversionConfig(**data_['conversion_factors'])
-
         instance.setInit(
-            paths=paths,
-            header=[item['name'] for item in data_['draggableElements']],
-            config=config,
+            paths=data_.file_path,
+            header=data_.header,
+            config=data_.conversion_factors,
         )
     except ValueError as e:
         # 捕获header配置错误
@@ -82,7 +78,7 @@ async def load_file(request: Request, data_: Dict):
 
 
 @router.post("/divide_interval")
-async def simple_pre_processing(request: Request, data: Dict):
+async def simple_pre_processing(request: Request, data: DivideIntervalRequest):
     """
     说明
     ---
@@ -96,7 +92,7 @@ async def simple_pre_processing(request: Request, data: Dict):
         return {"message": "请先加载文件", "status": "error"}
     
     try:
-        min_max = await instance.simple_load1(data.get('romax_origin', []))
+        min_max = await instance.simple_load1(data.romax_origin)
         echarts_data = await instance.savePic()
     except AttributeError as e:
         return {"message": f"请先加载文件", "status": "error"}
@@ -109,7 +105,7 @@ async def simple_pre_processing(request: Request, data: Dict):
 
 
 @router.post("/reduce_load")
-async def simple_load(request: Request, data: Dict):
+async def simple_load(request: Request, data: ReduceLoadRequest):
     """载荷简化接口"""
     manager = request.app.state.websocket_manager
     instance: CalSimpleLoad | None = manager.cal_instance
@@ -119,7 +115,7 @@ async def simple_load(request: Request, data: Dict):
         return {"message": "请先加载文件", "status": "error"}
     
     try:
-        msg = await instance.simple_load2(data['tableData'], data['romax_origin'])
+        msg = await instance.simple_load2(data.tableData, data.romax_origin)
     except Exception as e:
         logger.error(f"载荷缩减过程中发生错误: {e}")
         return {"message": f"载荷缩减失败: {e}", "status": "error"}

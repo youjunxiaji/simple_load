@@ -11,6 +11,7 @@ import pytest
 
 from app_simpleLoad import routes as routes_module
 from app_simpleLoad.core.config import FileParseError
+from tests import factories
 from tests.excel_io import read_gl
 from tests.fakes import StubCalSimpleLoad
 from tests.test_reduce_load import DEFAULT_BINS, table_data
@@ -26,6 +27,14 @@ def load_payload(dataset, config) -> dict:
         },
         "draggableElements": [{"name": name} for name in dataset.header],
         "conversion_factors": dataclasses.asdict(config),
+    }
+
+
+def reduce_payload(table_rows: list[dict] | None = None) -> dict:
+    """构造 /api/reduce_load 的请求体（romax_origin 用报文形态的字典）。"""
+    return {
+        "tableData": [{"0": "-100", "1": "100"}] if table_rows is None else table_rows,
+        "romax_origin": factories.ROMAX_ORIGIN,
     }
 
 
@@ -150,7 +159,9 @@ class TestDivideInterval:
         stub = StubCalSimpleLoad(load1_result='{"min":{}}', save_pic_result={"Fx[KN]": "{}"})
         api_client.app.state.websocket_manager.cal_instance = stub
 
-        response = api_client.post("/api/divide_interval", json={"romax_origin": romax_origin})
+        response = api_client.post(
+            "/api/divide_interval", json={"romax_origin": factories.ROMAX_ORIGIN}
+        )
 
         assert response.json() == {
             "message": "划分区间完成",
@@ -182,7 +193,7 @@ class TestDivideInterval:
 
 class TestReduceLoad:
     def test_未加载文件时提示(self, api_client):
-        response = api_client.post("/api/reduce_load", json={"tableData": [], "romax_origin": []})
+        response = api_client.post("/api/reduce_load", json=reduce_payload())
 
         assert response.json() == {"message": "请先加载文件", "status": "error"}
 
@@ -190,37 +201,78 @@ class TestReduceLoad:
         stub = StubCalSimpleLoad(load2_result=42)
         api_client.app.state.websocket_manager.cal_instance = stub
 
-        response = api_client.post(
-            "/api/reduce_load", json={"tableData": [{"0": "1"}], "romax_origin": romax_origin}
-        )
+        response = api_client.post("/api/reduce_load", json=reduce_payload([{"0": "1"}]))
 
         assert response.json() == {"message": "载荷简化处理全部完成", "count": 42}
+        # 报文里的 romax_origin 已被解析成 AxisMapping 再交给计算层
         assert stub.calls[0] == ("simple_load2", ([{"0": "1"}], romax_origin), {})
 
-    def test_业务校验失败时透传错误信息(self, api_client, romax_origin):
+    def test_业务校验失败时透传错误信息(self, api_client):
         stub = StubCalSimpleLoad(
             load2_result={"message": "Fx[KN]的区间值必须是单调递增的", "status": "error"}
         )
         api_client.app.state.websocket_manager.cal_instance = stub
 
-        response = api_client.post(
-            "/api/reduce_load", json={"tableData": [], "romax_origin": romax_origin}
-        )
+        response = api_client.post("/api/reduce_load", json=reduce_payload())
 
         assert response.json() == {"message": "Fx[KN]的区间值必须是单调递增的", "status": "error"}
 
-    def test_计算异常时返回失败原因(self, api_client, romax_origin):
+    def test_计算异常时返回失败原因(self, api_client):
         stub = StubCalSimpleLoad(load2_error=IndexError("list index out of range"))
         api_client.app.state.websocket_manager.cal_instance = stub
 
-        response = api_client.post(
-            "/api/reduce_load", json={"tableData": [], "romax_origin": romax_origin}
-        )
+        response = api_client.post("/api/reduce_load", json=reduce_payload())
 
         assert response.json() == {
             "message": "载荷缩减失败: list index out of range",
             "status": "error",
         }
+
+
+# ─── 请求体校验 ──────────────────────────────────────────────
+
+class TestRequestValidation:
+    """Pydantic 校验失败时，仍然是 200 + status=error 的业务错误形状。"""
+
+    def test_缺少必填字段(self, api_client, dataset, config):
+        payload = load_payload(dataset, config)
+        del payload["file_path"]["freq_table_path"]
+
+        body = api_client.post("/api/load_file", json=payload).json()
+
+        assert body["status"] == "error"
+        assert "freq_table_path" in body["message"]
+
+    def test_字段类型不对(self, api_client, dataset, config):
+        payload = load_payload(dataset, config)
+        payload["conversion_factors"]["tol"] = "很小"
+
+        body = api_client.post("/api/load_file", json=payload).json()
+
+        assert body["status"] == "error"
+        assert "tol" in body["message"]
+
+    def test_坐标映射不足三个轴(self, api_client):
+        body = api_client.post(
+            "/api/reduce_load",
+            json={"tableData": [{"0": "1"}], "romax_origin": factories.ROMAX_ORIGIN[:2]},
+        ).json()
+
+        assert body["status"] == "error"
+        assert "romax_origin" in body["message"]
+
+    def test_区间表为空(self, api_client):
+        body = api_client.post("/api/reduce_load", json=reduce_payload([])).json()
+
+        assert body["status"] == "error"
+        assert "tableData" in body["message"]
+
+    def test_多余字段被忽略(self, api_client, romax_origin):
+        stub = StubCalSimpleLoad(load2_result=1)
+        api_client.app.state.websocket_manager.cal_instance = stub
+        payload = reduce_payload() | {"这个字段前端多传了": 123}
+
+        assert api_client.post("/api/reduce_load", json=payload).json()["count"] == 1
 
 
 # ─── 完整链路（真实计算） ────────────────────────────────────
@@ -237,7 +289,9 @@ class TestFullFlowThroughApi:
         load = api_client.post("/api/load_file", json=load_payload(dataset, config))
         assert load.json()["status"] == "success"
 
-        divide = api_client.post("/api/divide_interval", json={"romax_origin": romax_origin})
+        divide = api_client.post(
+            "/api/divide_interval", json={"romax_origin": factories.ROMAX_ORIGIN}
+        )
         body = divide.json()
         assert body["status"] == "success"
         assert set(json.loads(body["min_max"])) == {"min", "max"}
@@ -246,8 +300,7 @@ class TestFullFlowThroughApi:
         }
 
         reduce_ = api_client.post(
-            "/api/reduce_load",
-            json={"tableData": table_data(*DEFAULT_BINS), "romax_origin": romax_origin},
+            "/api/reduce_load", json=reduce_payload(table_data(*DEFAULT_BINS))
         )
         assert reduce_.json()["message"] == "载荷简化处理全部完成"
         assert reduce_.json()["count"] == len(read_gl(dataset.gl_excel()))

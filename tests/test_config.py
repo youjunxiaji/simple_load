@@ -5,6 +5,7 @@ import polars as pl
 import pytest
 
 from app_simpleLoad.core.config import (
+    AxisMapping,
     ConversionConfig,
     FileParseError,
     FileResult,
@@ -71,6 +72,21 @@ class TestConversionConfig:
 
     def test_title_row_允许为_None_表示无标题行(self):
         assert ConversionConfig(title_row=None).title_row is None
+
+
+class TestAxisMapping:
+    @pytest.mark.parametrize(
+        ("origin", "axis", "inverted"),
+        [("x", "x", False), ("-z", "z", True), ("y", "y", False), ("-x", "x", True)],
+    )
+    def test_解析原始轴与正负号(self, origin, axis, inverted):
+        mapping = AxisMapping(romax="y", origin=origin)
+
+        assert mapping.axis == axis
+        assert mapping.inverted is inverted
+
+    def test_相等比较按值(self):
+        assert AxisMapping("z", "y") == AxisMapping("z", "y")
 
 
 class TestFileResult:

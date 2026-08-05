@@ -39,12 +39,19 @@ LOAD_COLUMNS: list[str] = ["Mx[KNm]", "My[KNm]", "Mz[KNm]", "Fx[KN]", "Fy[KN]", 
 #: 频次表默认表头（read_freq_table 只认列顺序，不认列名）
 FREQ_HEADER: tuple[str, str, str] = ("文件名", "全寿命发生次数", "仿真时间（s）")
 
-#: Romax 坐标系映射：romax z ← 原始 y，romax y ← 原始 -z
+#: Romax 坐标系映射的**报文形态**（前端传上来的样子）：romax z ← 原始 y，romax y ← 原始 -z
 ROMAX_ORIGIN: list[dict[str, str]] = [
     {"romax": "x", "origin": "x"},
     {"romax": "y", "origin": "-z"},
     {"romax": "z", "origin": "y"},
 ]
+
+
+def axis_mappings(payload: Sequence[Mapping[str, str]] = ROMAX_ORIGIN) -> list:
+    """把报文形态的坐标映射转成内部的 AxisMapping（计算层收的类型）。"""
+    from app_simpleLoad.core.config import AxisMapping
+
+    return [AxisMapping(**dict(item)) for item in payload]
 
 
 # ─── 数据类 ──────────────────────────────────────────────────

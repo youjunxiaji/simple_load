@@ -38,6 +38,26 @@ class ConversionConfig:
 
 
 @dataclass
+class AxisMapping:
+    """Romax 轴 ← 原始轴的对应关系
+
+    例：`AxisMapping(romax='y', origin='-z')` 表示 Romax 的 y 轴取原始 z 轴的反向。
+    """
+    romax: str    # Romax 坐标轴：x / y / z
+    origin: str   # 对应的原始轴，带负号表示反向，如 '-z'
+
+    @property
+    def axis(self) -> str:
+        """去掉负号后的原始轴名"""
+        return self.origin.replace("-", "")
+
+    @property
+    def inverted(self) -> bool:
+        """取值时是否需要反号"""
+        return "-" in self.origin
+
+
+@dataclass
 class FileResult:
     """单文件解析结果"""
     name: str                             # 文件名（不含 .txt 后缀）

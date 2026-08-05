@@ -1,6 +1,8 @@
 # main.py
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import uvicorn
 from rich.console import Console, Group
@@ -36,6 +38,24 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def on_request_validation_error(request: Request, exc: RequestValidationError):
+    """请求体不合法时，仍按业务错误的形状返回，前端只需认 status 字段。
+
+    （想换回 FastAPI 默认的 422 报文，删掉这个处理器即可。）
+    """
+    details = "；".join(
+        f"{'.'.join(str(part) for part in error['loc'][1:])}: {error['msg']}"
+        for error in exc.errors()
+    )
+    logger.error(f"请求参数不合法: {details}")
+    return JSONResponse(
+        status_code=200,
+        content={"message": f"请求参数不合法: {details}", "status": "error"},
+    )
+
 
 # 包含路由
 app.include_router(simple_load_router, prefix="/api")  # 添加 API 前缀

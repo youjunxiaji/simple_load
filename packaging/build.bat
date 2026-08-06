@@ -4,7 +4,7 @@ REM 切换到 UTF-8 编码
 chcp 65001
 
 REM 设置版本号环境变量
-set "APP_VERSION=1.2.3"
+set "APP_VERSION=1.3.0"
 echo 当前版本号: %APP_VERSION%
 
 REM 脚本自身所在目录（packaging\）与项目根目录

@@ -10,7 +10,11 @@
 
 import pytest
 
-from app_simpleLoad.module.cal_simpleLoad import CalSimpleLoad
+from app_simpleLoad.module.cal_simpleLoad import (
+    ALL_COMPONENTS,
+    CalSimpleLoad,
+    parse_interval_table,
+)
 from tests import factories, reference
 from tests.excel_io import assert_frames_close, read_gl
 
@@ -78,6 +82,172 @@ class TestComponentSelection:
 
         frame = read_gl(dataset.gl_excel())
         assert frame["fx_label"].isin(["fx1", "fx2", "fx3"]).all()
+
+
+# ─── 区间表与分量的对齐 ──────────────────────────────────────
+
+DEFAULT_SELECTED = [comp for comp in ALL_COMPONENTS if comp[1] in SELECTED_COLUMNS]
+
+
+def component_table(*pairs: tuple[str, list[float]]) -> list[dict]:
+    """构造带分量名的 tableData（前端新版报文形态）。"""
+    return [
+        {"component": column, **{str(i): str(value) for i, value in enumerate(bins)}}
+        for column, bins in pairs
+    ]
+
+
+DEFAULT_COMPONENT_ROWS = component_table(*zip(SELECTED_COLUMNS, DEFAULT_BINS))
+
+
+class TestParseIntervalTable:
+    """按分量名对齐（新前端）与按位置对齐（老前端）都要认。"""
+
+    def test_按分量名对齐(self):
+        bins, error = parse_interval_table(DEFAULT_COMPONENT_ROWS, DEFAULT_SELECTED)
+
+        assert error == ""
+        assert bins == DEFAULT_BINS
+
+    def test_行序打乱也能对上(self):
+        """这正是按名字对齐的意义：行序不再是隐含契约。"""
+        shuffled = list(reversed(DEFAULT_COMPONENT_ROWS))
+
+        bins, error = parse_interval_table(shuffled, DEFAULT_SELECTED)
+
+        assert error == ""
+        assert bins == DEFAULT_BINS
+
+    def test_列号乱序按列号排序(self):
+        rows = [{"component": col, "2": "100", "0": "-100", "1": "0"} for col in SELECTED_COLUMNS]
+
+        bins, _ = parse_interval_table(rows, DEFAULT_SELECTED)
+
+        assert bins[0] == [-100.0, 0.0, 100.0]
+
+    def test_忽略_component_之外的附加字段(self):
+        rows = [dict(row, index=3, foo="bar") for row in DEFAULT_COMPONENT_ROWS]
+
+        bins, error = parse_interval_table(rows, DEFAULT_SELECTED)
+
+        assert error == ""
+        assert bins == DEFAULT_BINS
+
+    def test_缺分量(self):
+        bins, error = parse_interval_table(DEFAULT_COMPONENT_ROWS[:-1], DEFAULT_SELECTED)
+
+        assert bins is None
+        assert error == "区间表缺少分量：Mz[KNm]"
+
+    def test_多了不参与分组的分量(self):
+        rows = DEFAULT_COMPONENT_ROWS + component_table(("My[KNm]", BINARY_BINS))
+
+        bins, error = parse_interval_table(rows, DEFAULT_SELECTED)
+
+        assert bins is None
+        assert error == "区间表包含未参与分组的分量：My[KNm]"
+
+    def test_分量重复(self):
+        rows = DEFAULT_COMPONENT_ROWS + component_table(("Fx[KN]", BINARY_BINS))
+
+        bins, error = parse_interval_table(rows, DEFAULT_SELECTED)
+
+        assert bins is None
+        assert error == "区间表中分量 Fx[KN] 出现多次"
+
+    def test_分量名无法识别(self):
+        rows = component_table(("Fx[KN]", BINARY_BINS), ("扭矩", BINARY_BINS))
+
+        bins, error = parse_interval_table(rows, DEFAULT_SELECTED)
+
+        assert bins is None
+        assert error == "区间表中的分量名无法识别：扭矩"
+
+    def test_半带标签直接拒绝(self):
+        rows = [dict(DEFAULT_COMPONENT_ROWS[0])] + [{"0": "-100", "1": "100"}]
+
+        bins, error = parse_interval_table(rows, DEFAULT_SELECTED)
+
+        assert bins is None
+        assert error == "区间表里有的行带分量名、有的不带，请统一"
+
+    def test_区间值不是数字(self):
+        rows = component_table(*zip(SELECTED_COLUMNS, DEFAULT_BINS))
+        rows[1]["1"] = "很大"
+
+        bins, error = parse_interval_table(rows, DEFAULT_SELECTED)
+
+        assert bins is None
+        assert error == "Fy[KN]的区间值必须是数字"
+
+    def test_老前端按位置对齐(self):
+        bins, error = parse_interval_table(table_data(*DEFAULT_BINS), DEFAULT_SELECTED)
+
+        assert error == ""
+        assert bins == DEFAULT_BINS
+
+    def test_老前端行数不符(self):
+        bins, error = parse_interval_table(table_data(*DEFAULT_BINS[:2]), DEFAULT_SELECTED)
+
+        assert bins is None
+        assert "需要 5 行（fx/fy/fz/mx/mz）" in error
+        assert "实际收到 2 行" in error
+
+    def test_老前端区间值不是数字(self):
+        rows = table_data(*DEFAULT_BINS)
+        rows[0]["1"] = "很大"
+
+        bins, error = parse_interval_table(rows, DEFAULT_SELECTED)
+
+        assert bins is None
+        assert error == "区间值必须是数字"
+
+    def test_行不是对象(self):
+        bins, error = parse_interval_table(["不是一行"], DEFAULT_SELECTED)
+
+        assert bins is None
+        assert error == "区间表里有格式不正确的行"
+
+
+class TestReduceWithComponentRows:
+    """带分量名的报文跑完整缩减。"""
+
+    async def test_与按位置的结果完全一致(self, divided, dataset, romax_origin, config):
+        await divided.simple_load2(DEFAULT_COMPONENT_ROWS, romax_origin)
+        by_component = read_gl(dataset.gl_excel())
+
+        await divided.simple_load2(table_data(*DEFAULT_BINS), romax_origin)
+        by_position = read_gl(dataset.gl_excel())
+
+        assert_frames_close(by_component, by_position, rel=1e-9)
+
+    async def test_行序打乱结果不变(self, divided, dataset, romax_origin):
+        await divided.simple_load2(DEFAULT_COMPONENT_ROWS, romax_origin)
+        normal = read_gl(dataset.gl_excel())
+
+        await divided.simple_load2(list(reversed(DEFAULT_COMPONENT_ROWS)), romax_origin)
+
+        assert_frames_close(read_gl(dataset.gl_excel()), normal, rel=1e-9)
+
+    async def test_缺分量时报错且不写文件(self, divided, dataset, romax_origin):
+        result = await divided.simple_load2(DEFAULT_COMPONENT_ROWS[:-1], romax_origin)
+
+        assert result == {"message": "区间表缺少分量：Mz[KNm]", "status": "error"}
+        assert not dataset.gl_excel().exists()
+
+    async def test_开关打开时必须给满六个分量(self, dataset, config, romax_origin):
+        instance = CalSimpleLoad()
+        instance.setInit(
+            paths=dataset.path_config(keep_torque_component=True),
+            header=dataset.header,
+            config=config,
+        )
+        await instance.simple_Pre_processing()
+        await instance.simple_load1(romax_origin)
+
+        result = await instance.simple_load2(DEFAULT_COMPONENT_ROWS, romax_origin)
+
+        assert result == {"message": "区间表缺少分量：My[KNm]", "status": "error"}
 
 
 # ─── 保留绕转轴力矩分量的开关 ────────────────────────────────

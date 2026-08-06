@@ -19,6 +19,116 @@ from app_simpleLoad.core.progress import ProgressReporter
 from app_simpleLoad.services.file_reader import read_all_txt_files, read_freq_table
 
 
+# ─── 分量与区间表 ─────────────────────────────────────────────
+
+#: 六个力/力矩分量：(标签前缀, 列名, 所在轴)，顺序即区间表按位置对齐时的行序
+ALL_COMPONENTS: List[tuple[str, str, str]] = [
+    ('fx', 'Fx[KN]', 'x'),
+    ('fy', 'Fy[KN]', 'y'),
+    ('fz', 'Fz[KN]', 'z'),
+    ('mx', 'Mx[KNm]', 'x'),
+    ('my', 'My[KNm]', 'y'),
+    ('mz', 'Mz[KNm]', 'z'),
+]
+
+#: 区间表行里存分量名的键（前端与历史数据共用）
+COMPONENT_KEY = 'component'
+
+
+def _row_bins(row: Dict) -> List[float]:
+    """取一行里填了值的分段边界。
+
+    只认数字键（"0"~"10"），因此 component、index 之类的附加字段自动被忽略；
+    按列号排序，不依赖 JSON 的键顺序。
+
+    Args:
+        row: 区间表的一行
+
+    Returns:
+        升序列号对应的边界值列表
+
+    Raises:
+        ValueError: 某个边界不是数字
+    """
+    numeric_cells = [(int(key), value) for key, value in row.items() if str(key).isdigit()]
+    return [
+        float(value)
+        for _, value in sorted(numeric_cells)
+        if value != '' and value is not None
+    ]
+
+
+def parse_interval_table(
+    table_data: List[Dict],
+    selected_components: List[tuple[str, str, str]],
+) -> tuple[List[List[float]] | None, str]:
+    """把前端的区间表对齐到参与分组的分量上。
+
+    优先按行里的 `component` 字段对齐 —— 这样即使前端行序变了、或者用户改了
+    坐标系映射，也不会把 A 分量的区间用到 B 分量上。老版本前端不带该字段时，
+    退回「按位置一一对应」的老规则。
+
+    Args:
+        table_data: 前端 tableData，形如 `[{"component": "Fx[KN]", "0": "-940", ...}, ...]`
+        selected_components: 参与分组的分量，元素为 (标签前缀, 列名, 轴)
+
+    Returns:
+        (按 selected_components 顺序排好的边界列表, 错误消息)；出错时前者为 None，
+        错误消息直接展示给用户。
+    """
+    expected = [col_name for _, col_name, _ in selected_components]
+    rows = [row for row in table_data if isinstance(row, dict)]
+    if len(rows) != len(table_data):
+        return None, "区间表里有格式不正确的行"
+
+    labelled = [row for row in rows if row.get(COMPONENT_KEY)]
+
+    # ── 老前端：整表都不带分量名，按位置对齐 ──
+    if not labelled:
+        if len(rows) != len(expected):
+            names = "/".join(comp_name for comp_name, _, _ in selected_components)
+            return None, (
+                f"区间行数与分量数不匹配：需要 {len(expected)} 行（{names}），"
+                f"实际收到 {len(rows)} 行"
+            )
+        try:
+            return [_row_bins(row) for row in rows], ""
+        except (TypeError, ValueError):
+            return None, "区间值必须是数字"
+
+    if len(labelled) != len(rows):
+        return None, "区间表里有的行带分量名、有的不带，请统一"
+
+    # ── 新前端：按分量名对齐 ──
+    by_component: Dict[str, Dict] = {}
+    for row in labelled:
+        name = str(row[COMPONENT_KEY])
+        if name in by_component:
+            return None, f"区间表中分量 {name} 出现多次"
+        by_component[name] = row
+
+    known = {col_name for _, col_name, _ in ALL_COMPONENTS}
+    unknown = [name for name in by_component if name not in known]
+    if unknown:
+        return None, f"区间表中的分量名无法识别：{'、'.join(unknown)}"
+
+    missing = [name for name in expected if name not in by_component]
+    if missing:
+        return None, f"区间表缺少分量：{'、'.join(missing)}"
+
+    extra = [name for name in by_component if name not in expected]
+    if extra:
+        return None, f"区间表包含未参与分组的分量：{'、'.join(extra)}"
+
+    bins_list = []
+    for name in expected:
+        try:
+            bins_list.append(_row_bins(by_component[name]))
+        except (TypeError, ValueError):
+            return None, f"{name}的区间值必须是数字"
+    return bins_list, ""
+
+
 # ─── 主类 ─────────────────────────────────────────────────────
 
 class CalSimpleLoad:
@@ -230,42 +340,21 @@ class CalSimpleLoad:
         await self.progress.send_text("开始载荷缩减处理...")
         await self.progress.update_smoothly(0, 10, 0.5)
 
-        # 解析用户定义的分区边界
-        lists = [
-            [float(value) for value in row.values() if value != '']
-            for row in table_data
-        ]
-
         # 根据 romax_origin 确定要排除的轴
         z_corresponds_to = romax_origin[2].axis
-
-        all_components = [
-            ('fx', 'Fx[KN]', 'x'),
-            ('fy', 'Fy[KN]', 'y'),
-            ('fz', 'Fz[KN]', 'z'),
-            ('mx', 'Mx[KNm]', 'x'),
-            ('my', 'My[KNm]', 'y'),
-            ('mz', 'Mz[KNm]', 'z')
-        ]
 
         # 排除 z 对应轴的力矩分量；开关打开时六个分量一视同仁
         keep_torque = self.paths.keep_torque_component
         selected_components = []
-        for comp_name, col_name, axis in all_components:
+        for comp_name, col_name, axis in ALL_COMPONENTS:
             if not keep_torque and comp_name.startswith('m') and axis == z_corresponds_to:
                 continue
             selected_components.append((comp_name, col_name, axis))
 
-        # 区间行与分量按位置一一对应，行数对不上会导致标签错位、甚至静默丢分量
-        if len(lists) != len(selected_components):
-            expected = "/".join(comp_name for comp_name, _, _ in selected_components)
-            return {
-                "message": (
-                    f"区间行数与分量数不匹配：需要 {len(selected_components)} 行"
-                    f"（{expected}），实际收到 {len(lists)} 行"
-                ),
-                "status": "error",
-            }
+        # 解析用户定义的分区边界：优先按行里的分量名对齐，老前端按位置对齐
+        lists, error = parse_interval_table(table_data, selected_components)
+        if lists is None:
+            return {"message": error, "status": "error"}
 
         # 构建标签映射
         label_mappings = []
